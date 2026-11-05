@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { X, Download, ExternalLink, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { X, Download, ExternalLink, Loader2, FileText, AlertCircle, FileArchive, Image as ImageIcon } from 'lucide-react';
 import { paperService } from '../services/paperService';
 
 export default function PDFPreviewModal({ paper, onClose, onDownload }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const fileExt = (paper?.fileExtension || (paper?.fileName ? paper.fileName.split('.').pop().toLowerCase() : 'pdf')).toLowerCase();
+  const isPdf = fileExt === 'pdf';
+  const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(fileExt);
 
   useEffect(() => {
     let active = true;
@@ -23,7 +27,7 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
         }
       } catch (err) {
         if (active) {
-          setError('Failed to load PDF preview.');
+          setError('Failed to load file preview.');
           setLoading(false);
         }
       }
@@ -49,15 +53,15 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/70">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
-              <FileText className="w-5 h-5" />
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+              {isImage ? <ImageIcon className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
             </div>
             <div className="overflow-hidden">
               <h2 className="text-base font-semibold text-slate-100 truncate">
                 {paper.title}
               </h2>
               <p className="text-xs text-slate-400">
-                {paper.subject?.toUpperCase()} • {paper.year} • {paper.term}
+                {paper.subject?.toUpperCase()} • {paper.year} • {paper.term} • {fileExt.toUpperCase()}
               </p>
             </div>
           </div>
@@ -79,7 +83,7 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm cursor-pointer"
             >
               <Download className="w-4 h-4" />
-              <span>Download</span>
+              <span>Download {fileExt.toUpperCase()}</span>
             </button>
             <button
               onClick={onClose}
@@ -90,8 +94,8 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
           </div>
         </div>
 
-        {/* PDF Viewer Body */}
-        <div className="flex-1 bg-slate-950 relative flex items-center justify-center overflow-hidden">
+        {/* Viewer Body */}
+        <div className="flex-1 bg-slate-950 relative flex items-center justify-center overflow-auto p-4">
           {loading && (
             <div className="flex flex-col items-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
@@ -100,28 +104,51 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
           )}
 
           {error && (
-            <div className="flex flex-col items-center gap-3 text-slate-300 p-6 text-center max-w-md">
-              <AlertCircle className="w-10 h-10 text-rose-400" />
+            <div className="flex flex-col items-center gap-3 text-rose-400 text-center p-6 max-w-md">
+              <AlertCircle className="w-10 h-10 text-rose-500" />
               <p className="text-sm">{error}</p>
               <button
                 onClick={() => onDownload(paper)}
-                className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium"
+                className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold"
               >
-                Download PDF Directly Instead
+                <Download className="w-4 h-4" /> Direct Download File
               </button>
             </div>
           )}
 
           {!loading && !error && previewUrl && (
-            <iframe
-              src={`${previewUrl}#toolbar=0`}
-              title={paper.title}
-              className="w-full h-full border-none"
-            />
+            <>
+              {isPdf ? (
+                <iframe
+                  src={`${previewUrl}#toolbar=1`}
+                  title={paper.title}
+                  className="w-full h-full border-0 rounded-lg shadow-inner bg-slate-900"
+                />
+              ) : isImage ? (
+                <img
+                  src={previewUrl}
+                  alt={paper.title}
+                  className="max-h-full max-w-full object-contain rounded-lg shadow-lg"
+                />
+              ) : (
+                <div className="text-center p-8 bg-slate-900/80 rounded-2xl border border-slate-800 max-w-md">
+                  <FileArchive className="w-16 h-16 text-indigo-400 mx-auto mb-3" />
+                  <h3 className="text-lg font-bold text-slate-100 mb-1">{paper.title}</h3>
+                  <p className="text-xs text-slate-400 mb-5">
+                    This file is in {fileExt.toUpperCase()} format. Click download below to open or extract on your device.
+                  </p>
+                  <button
+                    onClick={() => onDownload(paper)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-600/30"
+                  >
+                    <Download className="w-4 h-4" /> Download {paper.fileName || `${fileExt.toUpperCase()} File`}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
     </div>
   );
 }
-

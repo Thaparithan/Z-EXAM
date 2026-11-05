@@ -41,23 +41,19 @@ export default function BulkUploadManager() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Filter PDF files and check 50MB limit
-    const validPdfs = [];
+    // Support ALL file types (PDF, Word, Images, ZIP, etc.) up to 50MB
+    const validFiles = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        if (file.size <= 50 * 1024 * 1024) {
-          validPdfs.push(file);
-        } else {
-          alert(`File "${file.name}" exceeds the 50 MB limit and was skipped.`);
-        }
+      if (file.size <= 50 * 1024 * 1024) {
+        validFiles.push(file);
       } else {
-        alert(`File "${file.name}" is not a PDF and was skipped.`);
+        alert(`File "${file.name}" exceeds the 50 MB limit and was skipped.`);
       }
     }
 
-    if (validPdfs.length > 0) {
-      uploadQueue.addFiles(validPdfs, {
+    if (validFiles.length > 0) {
+      uploadQueue.addFiles(validFiles, {
         subject: batchSubject,
         year: batchYear,
         term: batchTerm,
@@ -220,7 +216,7 @@ export default function BulkUploadManager() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept="application/pdf,.pdf"
+            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.zip,.rar,.7z,.txt,.pptx,.xlsx,application/*,image/*"
             onChange={handleFilesSelected}
             className="hidden"
           />
@@ -228,13 +224,13 @@ export default function BulkUploadManager() {
             <UploadCloud className="w-7 h-7" />
           </div>
           <p className="text-sm font-bold text-slate-100">
-            Click to Browse or Drag & Drop Multiple PDF Exam Papers
+            Click to Browse or Drag & Drop Multiple Exam Papers & Resources
           </p>
           <p className="text-xs text-slate-400 mt-1 max-w-md">
-            Select 5 to 10+ PDF files at once. Files automatically queue with maximum 3 simultaneous high-speed streams.
+            Select 5 to 10+ files at once (PDF, Word, Images, ZIP). Files automatically queue with maximum 3 simultaneous high-speed streams.
           </p>
           <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-            PDF only • Up to 50 MB per file
+            All Formats Supported (PDF, DOCX, Images, ZIP) • Up to 50 MB per file
           </span>
         </div>
       </div>

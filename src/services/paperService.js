@@ -1,19 +1,5 @@
-import { 
-  db, 
-  storage, 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
-  orderBy, 
-  serverTimestamp,
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL, 
-  deleteObject 
-} from './firebase';
+import { supabase, isSupabaseConfigured, STORAGE_BUCKET, trackDownload } from './supabase.js';
+import { SUBJECTS } from '../constants/subjects.js';
 
 const COLLECTION_NAME = 'exam_papers';
 const LOCAL_STORAGE_KEY = 'zexam_local_papers_index';
@@ -24,7 +10,7 @@ const STORE_NAME = 'pdf_blobs';
 // Open IndexedDB for offline / local fallback blob storage
 const openIndexedDB = () => {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
+    if (typeof window === 'undefined' || !window.indexedDB) {
       reject(new Error('IndexedDB not supported'));
       return;
     }
@@ -73,41 +59,105 @@ const deleteBlobFromIndexedDB = async (id) => {
   });
 };
 
-// Check if Firebase is active & ready
-export const isFirebaseActive = () => {
-  return !!(db && storage);
+// Check if Supabase Cloud is active & configured
+export const isSupabaseActive = () => {
+  return isSupabaseConfigured;
 };
+
+// Helper: Normalize Supabase row to Z-EXAM model
+const mapRowToPaper = (row) => ({
+  id: row.id,
+  title: row.title,
+  subject: row.subject_id || row.subject || 'ict',
+  subjectName: row.subject_name || row.subject_id,
+  year: String(row.year || '2024'),
+  term: row.term || 'Final Paper',
+  grade: row.grade || 'All Grades',
+  fileName: row.file_name || 'paper.pdf',
+  fileSize: Number(row.file_size_bytes || row.file_size || 0),
+  fileExtension: row.file_extension || (row.file_name ? row.file_name.split('.').pop().toLowerCase() : 'pdf'),
+  mimeType: row.mime_type || 'application/pdf',
+  fileUrl: row.file_url,
+  storagePath: row.file_path,
+  downloadCount: Number(row.download_count || 0),
+  createdAtMs: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  isLocal: false,
+});
+
+const SAMPLE_STARTER_PAPERS = [
+  {
+    id: 'sample-ict-2024',
+    title: 'G.C.E O/L ICT Model Examination Paper (Paper I & II)',
+    subject: 'ict',
+    subjectName: 'ICT',
+    year: '2024',
+    term: 'Model Paper',
+    grade: 'Grade 11',
+    fileName: 'sample_ict_2024_paper.pdf',
+    fileSize: 456,
+    fileExtension: 'pdf',
+    mimeType: 'application/pdf',
+    fileUrl: '/sample_ict_2024_paper.pdf',
+    storagePath: 'sample/sample_ict_2024_paper.pdf',
+    downloadCount: 142,
+    createdAtMs: Date.now() - 3600000,
+    isLocal: false,
+  }
+];
 
 export const paperService = {
   // Subscribe to real-time papers updates
   subscribePapers: (callback) => {
-    if (isFirebaseActive()) {
-      try {
-        const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const papers = snapshot.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...docSnap.data(),
-            // convert Firestore timestamp to readable ms
-            createdAtMs: docSnap.data().createdAt?.toMillis?.() || Date.now()
-          }));
-          callback(papers);
-        }, (error) => {
-          console.error('Firestore snapshot listener error:', error);
-          // Fallback to local on error
-          callback(paperService.getLocalPapers());
-        });
+    if (isSupabaseActive()) {
+      let isSubscribed = true;
 
-        return unsubscribe;
-      } catch (err) {
-        console.error('Failed to setup Firestore listener:', err);
-      }
+      const fetchPapers = async () => {
+        try {
+          const { data, error } = await supabase
+            .from(COLLECTION_NAME)
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+          if (isSubscribed) {
+            const mapped = (data && data.length > 0) 
+              ? data.map(mapRowToPaper) 
+              : SAMPLE_STARTER_PAPERS;
+            callback(mapped);
+          }
+        } catch (err) {
+          console.warn('Supabase papers query warning, falling back to starter index:', err.message);
+          if (isSubscribed) {
+            const local = paperService.getLocalPapers();
+            callback(local.length > 0 ? local : SAMPLE_STARTER_PAPERS);
+          }
+        }
+      };
+
+      fetchPapers();
+
+      // Listen to real-time changes
+      const channel = supabase
+        .channel('zexam_papers_realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: COLLECTION_NAME },
+          () => {
+            fetchPapers();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        isSubscribed = false;
+        supabase.removeChannel(channel);
+      };
     }
 
     // Local / Offline fallback listener
     const notifyLocal = () => {
       const papers = paperService.getLocalPapers();
-      callback(papers);
+      callback(papers.length > 0 ? papers : SAMPLE_STARTER_PAPERS);
     };
 
     notifyLocal();
@@ -126,53 +176,70 @@ export const paperService = {
     };
   },
 
-  // Upload Paper (PDF + Metadata)
+  // Upload Paper (Supporting ANY File Type: PDF, DOCX, Images, ZIP, etc.)
   uploadPaper: async ({ title, subject, year, term, grade, file }, onProgress = () => {}) => {
     const timestamp = Date.now();
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'file';
+    const mimeType = file.type || 'application/octet-stream';
 
-    if (isFirebaseActive()) {
-      // 1. Upload to Firebase Storage
-      const storagePath = `papers/${subject}/${timestamp}_${sanitizedFileName}`;
-      const fileRef = ref(storage, storagePath);
-      const uploadTask = uploadBytesResumable(fileRef, file);
+    const subjectObj = SUBJECTS.find((s) => s.id.toLowerCase() === subject.toLowerCase());
+    const subjectName = subjectObj ? subjectObj.name : subject.toUpperCase();
 
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            onProgress(Math.round(progress));
-          },
-          (error) => {
-            console.error('Firebase storage upload failed:', error);
-            reject(error);
-          },
-          async () => {
-            try {
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              // 2. Add metadata to Firestore
-              const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-                title: title.trim(),
-                subject: subject.toLowerCase(),
-                year: String(year),
-                term: term || 'Final Paper',
-                grade: grade || 'All Grades',
-                fileName: file.name,
-                fileSize: file.size,
-                fileUrl: downloadUrl,
-                storagePath: storagePath,
-                createdAt: serverTimestamp()
-              });
+    if (isSupabaseActive()) {
+      try {
+        onProgress(20);
+        const storagePath = `papers/${subject}/${timestamp}_${cleanFileName}`;
 
-              resolve({ id: docRef.id, success: true });
-            } catch (err) {
-              console.error('Firestore save error:', err);
-              reject(err);
-            }
-          }
-        );
-      });
+        // 1. Upload to Supabase Storage
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: mimeType,
+          });
+
+        if (uploadErr) throw uploadErr;
+
+        onProgress(70);
+
+        // 2. Obtain Public URL
+        const { data: urlData } = supabase.storage
+          .from(STORAGE_BUCKET)
+          .getPublicUrl(uploadData.path);
+
+        // 3. Insert record in PostgreSQL database
+        const payload = {
+          title: title.trim(),
+          subject_id: subject.toLowerCase(),
+          subject_name: subjectName,
+          term: term || 'Final Paper',
+          year: String(year),
+          grade: grade || 'All Grades',
+          file_name: file.name,
+          file_path: uploadData.path,
+          file_url: urlData.publicUrl,
+          file_size_bytes: file.size,
+          file_extension: fileExtension,
+          mime_type: mimeType,
+          download_count: 0,
+        };
+
+        const { data: inserted, error: dbErr } = await supabase
+          .from(COLLECTION_NAME)
+          .insert(payload)
+          .select()
+          .single();
+
+        if (dbErr) throw dbErr;
+
+        onProgress(100);
+        return { id: inserted.id, success: true };
+      } catch (err) {
+        console.error('Supabase upload error:', err);
+        throw err;
+      }
     }
 
     // Local Fallback Upload using IndexedDB + LocalStorage
@@ -196,15 +263,19 @@ export const paperService = {
           id: paperId,
           title: title.trim(),
           subject: subject.toLowerCase(),
+          subjectName: subjectName,
           year: String(year),
           term: term || 'Final Paper',
           grade: grade || 'All Grades',
           fileName: file.name,
           fileSize: file.size,
-          fileUrl: null, // Fetched dynamically from IndexedDB
+          fileExtension: fileExtension,
+          mimeType: mimeType,
+          fileUrl: null, // read dynamically from IndexedDB
           isLocal: true,
           storagePath: `local/${paperId}`,
-          createdAtMs: timestamp
+          downloadCount: 0,
+          createdAtMs: timestamp,
         };
 
         localPapers.unshift(newPaper);
@@ -221,19 +292,26 @@ export const paperService = {
 
   // Delete Paper
   deletePaper: async (paper) => {
-    if (isFirebaseActive() && !paper.isLocal) {
+    if (isSupabaseActive() && !paper.isLocal) {
       try {
-        // Delete Firestore document
-        await deleteDoc(doc(db, COLLECTION_NAME, paper.id));
-
-        // Delete Firebase Storage object
+        // Delete from Supabase Storage
         if (paper.storagePath) {
-          const fileRef = ref(storage, paper.storagePath);
-          await deleteObject(fileRef).catch((e) => console.warn('Storage delete warning:', e));
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([paper.storagePath])
+            .catch((e) => console.warn('Storage delete warning:', e));
         }
+
+        // Delete from database
+        const { error: dbErr } = await supabase
+          .from(COLLECTION_NAME)
+          .delete()
+          .eq('id', paper.id);
+
+        if (dbErr) throw dbErr;
         return { success: true };
       } catch (err) {
-        console.error('Failed to delete paper from Firebase:', err);
+        console.error('Failed to delete paper from Supabase:', err);
         throw err;
       }
     }
@@ -251,17 +329,20 @@ export const paperService = {
     }
   },
 
-  // Download Paper Helper (Handles both Firebase CDN URLs & Local IndexedDB Blobs)
+  // Download Paper Helper (Handles ANY File Type: PDF, Word, Images, ZIP)
   downloadPaper: async (paper) => {
     try {
+      // Increment download counter
+      await trackDownload(paper.id);
+
       if (paper.fileUrl) {
-        // Firebase or external URL - direct fetch or anchor trigger
+        // Fetch and download cleanly with original extension
         const response = await fetch(paper.fileUrl);
         const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = paper.fileName || `${paper.title}.pdf`;
+        link.download = paper.fileName || `${paper.title}.${paper.fileExtension || 'pdf'}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -269,20 +350,19 @@ export const paperService = {
         return;
       }
 
-      // Local Blob
+      // Local Blob download
       const blob = await getBlobFromIndexedDB(paper.id);
-      if (!blob) throw new Error('PDF file blob not found in storage');
+      if (!blob) throw new Error('File blob not found in storage');
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = paper.fileName || `${paper.title}.pdf`;
+      link.download = paper.fileName || `${paper.title}.${paper.fileExtension || 'pdf'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback: open in new tab if fileUrl exists
       if (paper.fileUrl) {
         window.open(paper.fileUrl, '_blank');
       } else {
@@ -291,7 +371,7 @@ export const paperService = {
     }
   },
 
-  // Get preview URL (for PDF preview modal)
+  // Get preview URL (for PDF or Image preview modal)
   getPreviewUrl: async (paper) => {
     if (paper.fileUrl) return paper.fileUrl;
     const blob = await getBlobFromIndexedDB(paper.id);
@@ -301,7 +381,7 @@ export const paperService = {
     return null;
   },
 
-  // Helper to read local papers array (starts strictly clean: empty [])
+  // Helper to read local papers array
   getLocalPapers: () => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -309,6 +389,5 @@ export const paperService = {
     } catch {
       return [];
     }
-  }
+  },
 };
-

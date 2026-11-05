@@ -5,8 +5,10 @@ import {
   Eye, 
   Trash2, 
   Calendar, 
-  Clock, 
-  HardDrive 
+  HardDrive,
+  FileCode,
+  FileArchive,
+  Image as ImageIcon
 } from 'lucide-react';
 import { SUBJECTS } from '../constants/subjects';
 
@@ -24,8 +26,34 @@ export default function PaperCard({
     badgeBg: 'bg-slate-800 text-slate-300 border-slate-700'
   };
 
+  const fileExt = (paper.fileExtension || (paper.fileName ? paper.fileName.split('.').pop().toLowerCase() : 'pdf')).toLowerCase();
+
+  const getFormatBadge = (ext) => {
+    switch (ext) {
+      case 'pdf':
+        return { label: 'PDF', bg: 'bg-red-500/10 text-red-400 border-red-500/20', icon: FileText };
+      case 'doc':
+      case 'docx':
+        return { label: 'DOCX', bg: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: FileText };
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'webp':
+        return { label: 'IMAGE', bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: ImageIcon };
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return { label: 'ZIP', bg: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: FileArchive };
+      default:
+        return { label: ext.toUpperCase(), bg: 'bg-slate-500/10 text-slate-400 border-slate-500/20', icon: FileCode };
+    }
+  };
+
+  const formatConfig = getFormatBadge(fileExt);
+  const FormatIcon = formatConfig.icon;
+
   const formatFileSize = (bytes) => {
-    if (!bytes || bytes === 0) return 'PDF Document';
+    if (!bytes || bytes === 0) return `${fileExt.toUpperCase()} Document`;
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -42,20 +70,27 @@ export default function PaperCard({
     });
   };
 
+  const isPreviewable = ['pdf', 'png', 'jpg', 'jpeg', 'webp'].includes(fileExt);
+
   return (
     <div className="group relative bg-slate-900/90 hover:bg-slate-850 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-5 shadow-lg transition-all duration-300 hover:shadow-indigo-500/10 hover:-translate-y-0.5 flex flex-col justify-between backdrop-blur-sm">
       <div>
         {/* Top Badges */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${subjectConfig.badgeBg}`}>
-            {subjectConfig.name}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${subjectConfig.badgeBg}`}>
+              {subjectConfig.name}
+            </span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${formatConfig.bg}`}>
+              {formatConfig.label}
+            </span>
+          </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-            <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60">
+            <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/60 font-mono">
               {paper.year}
             </span>
             {paper.term && (
-              <span className="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/40 text-slate-300">
+              <span className="bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/40 text-slate-300 text-[11px]">
                 {paper.term}
               </span>
             )}
@@ -64,8 +99,8 @@ export default function PaperCard({
 
         {/* Paper Title */}
         <div className="flex items-start gap-3 my-2">
-          <div className="p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 shrink-0 group-hover:scale-105 transition-transform">
-            <FileText className="w-5 h-5" />
+          <div className={`p-2.5 rounded-xl shrink-0 group-hover:scale-105 transition-transform border ${formatConfig.bg}`}>
+            <FormatIcon className="w-5 h-5" />
           </div>
           <div>
             <h3 className="font-semibold text-slate-100 text-base leading-snug group-hover:text-indigo-300 transition-colors line-clamp-2">
@@ -87,6 +122,11 @@ export default function PaperCard({
             <Calendar className="w-3.5 h-3.5 text-slate-500" />
             {formatDate(paper.createdAtMs)}
           </span>
+          {paper.downloadCount > 0 && (
+            <span className="inline-flex items-center gap-1 text-slate-500 text-[11px]">
+              • {paper.downloadCount} downloads
+            </span>
+          )}
         </div>
       </div>
 
@@ -97,22 +137,24 @@ export default function PaperCard({
           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 cursor-pointer"
         >
           <Download className="w-4 h-4" />
-          <span>Download PDF</span>
+          <span>Download {formatConfig.label}</span>
         </button>
 
-        <button
-          onClick={() => onPreview(paper)}
-          title="Preview PDF"
-          className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors cursor-pointer"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
+        {isPreviewable && (
+          <button
+            onClick={() => onPreview(paper)}
+            title={`Preview ${formatConfig.label}`}
+            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors cursor-pointer"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        )}
 
         {isAdmin && (
           <button
             onClick={() => onDelete(paper)}
-            title="Delete Exam Paper"
-            className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition-colors cursor-pointer"
+            title="Delete Paper"
+            className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -121,4 +163,3 @@ export default function PaperCard({
     </div>
   );
 }
-
