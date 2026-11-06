@@ -220,7 +220,11 @@ export const paperService = {
 
               if (dbErr) {
                 console.error('Database insertion error:', dbErr);
-                throw new Error(`Database error: ${dbErr.message || 'Failed to save paper metadata'}`);
+                let friendlyMsg = dbErr.message || 'Failed to save paper metadata';
+                if (friendlyMsg.toLowerCase().includes('row-level security')) {
+                  friendlyMsg = 'Supabase RLS Policy Blocked: Run the SQL query in supabase/fix_rls.sql in your Supabase SQL Editor to allow paper uploads.';
+                }
+                throw new Error(`Database error: ${friendlyMsg}`);
               }
 
               resolve({ id: inserted.id, success: true });

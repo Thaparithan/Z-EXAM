@@ -79,6 +79,15 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- 8. RLS Policies
+DROP POLICY IF EXISTS "Public students can view exam papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admins can insert exam papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admins can update exam papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admins can delete exam papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Public Read Papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admin Insert Papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admin Update Papers" ON public.exam_papers;
+DROP POLICY IF EXISTS "Admin Delete Papers" ON public.exam_papers;
+
 -- Public Students: Can read all papers
 CREATE POLICY "Public Read Papers" 
     ON public.exam_papers FOR SELECT 
@@ -103,6 +112,10 @@ VALUES ('exam-papers', 'exam-papers', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- 10. Storage RLS Policies (Allowing All File Formats)
+DROP POLICY IF EXISTS "Public Read Bucket" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Upload Bucket" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated Delete Bucket" ON storage.objects;
+
 CREATE POLICY "Public Read Bucket" 
     ON storage.objects FOR SELECT 
     USING (bucket_id = 'exam-papers');
