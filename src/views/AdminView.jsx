@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { 
   FolderOpen, 
   Zap, 
-  FileText 
+  FileText,
+  Search,
+  X
 } from 'lucide-react';
 import { SUBJECTS } from '../constants/subjects';
 import PaperCard from '../components/PaperCard';
 import SubjectTabs from '../components/SubjectTabs';
 import BulkUploadManager from '../components/BulkUploadManager';
 import { paperService } from '../services/paperService';
+import { toast } from '../services/toast';
 
 export default function AdminView({
   papers,
@@ -32,9 +35,9 @@ export default function AdminView({
     if (confirm(`Are you sure you want to permanently delete "${paper.title}"?`)) {
       try {
         await paperService.deletePaper(paper);
-        alert('Paper deleted successfully.');
+        toast.success(`Deleted "${paper.title}" successfully.`);
       } catch (err) {
-        alert('Failed to delete paper. Please try again.');
+        toast.error('Failed to delete paper. Please try again.');
       }
     }
   };
@@ -49,7 +52,9 @@ export default function AdminView({
       const matchTitle = p.title?.toLowerCase().includes(q);
       const matchSub = p.subject?.toLowerCase().includes(q);
       const matchYr = String(p.year).includes(q);
-      if (!matchTitle && !matchSub && !matchYr) return false;
+      const matchTerm = p.term?.toLowerCase().includes(q);
+      const matchExt = (p.fileExtension || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchSub && !matchYr && !matchTerm && !matchExt) return false;
     }
     return true;
   });
@@ -134,16 +139,36 @@ export default function AdminView({
         ) : (
           /* TAB 2: MANAGE PAPERS */
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
-              <div className="w-full sm:w-auto">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+              <div className="flex-1 overflow-x-auto">
                 <SubjectTabs
                   selectedSubject={manageSubject}
                   onSelectSubject={setManageSubject}
                   paperCounts={paperCounts}
                 />
               </div>
-              <div className="text-xs text-slate-400 shrink-0">
-                Found <span className="font-bold text-slate-200">{filteredManagePapers.length}</span> papers
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={manageSearch}
+                    onChange={(e) => setManageSearch(e.target.value)}
+                    placeholder="Search manage papers..."
+                    className="w-full pl-9 pr-8 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                  {manageSearch && (
+                    <button
+                      onClick={() => setManageSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="text-xs text-slate-400 whitespace-nowrap hidden sm:block">
+                  Found <span className="font-bold text-slate-200">{filteredManagePapers.length}</span> papers
+                </div>
               </div>
             </div>
 

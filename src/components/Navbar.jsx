@@ -1,11 +1,11 @@
 import React from 'react';
 import { 
-  GraduationCap, 
   Search, 
   X, 
   LogOut, 
   ArrowLeft, 
-  ShieldCheck 
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function Navbar({
@@ -13,7 +13,9 @@ export default function Navbar({
   setSearchTerm,
   isAdmin,
   onLogout,
-  onSwitchView
+  onSwitchView,
+  theme = 'dark',
+  toggleTheme
 }) {
   return (
     <header className="sticky top-0 z-40 w-full bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80">
@@ -66,7 +68,23 @@ export default function Navbar({
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          {/* Theme Toggle (Dark / Light) */}
+          {toggleTheme && (
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label="Toggle theme"
+              className="p-2 sm:px-2.5 sm:py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer flex items-center justify-center"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400 hover:rotate-45 transition-transform" />
+              ) : (
+                <Moon className="w-4 h-4 text-indigo-400 hover:-rotate-12 transition-transform" />
+              )}
+            </button>
+          )}
+
           {isAdmin ? (
             <>
               {/* Exit to Student View */}

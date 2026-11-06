@@ -11,6 +11,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { SUBJECTS } from '../constants/subjects';
+import { toast } from '../services/toast';
 
 export default function PaperCard({ 
   paper, 
@@ -133,7 +134,10 @@ export default function PaperCard({
       {/* Action Buttons */}
       <div className="mt-5 pt-3 border-t border-slate-800/80 flex items-center gap-2">
         <button
-          onClick={() => onDownload(paper)}
+          onClick={() => {
+            toast.info(`Preparing "${paper.title}" download...`);
+            onDownload(paper);
+          }}
           className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 cursor-pointer"
         >
           <Download className="w-4 h-4" />

@@ -1,4 +1,5 @@
 import { paperService } from './paperService.js';
+import { toast } from './toast.js';
 
 const MAX_CONCURRENT_UPLOADS = 3;
 const MAX_RETRIES = 2;
@@ -192,6 +193,7 @@ class UploadQueueManager {
       item.speed = 0;
       item.eta = 0;
       item.error = null;
+      toast.success(`"${item.title}" uploaded successfully!`);
       this.notify();
       this.processQueue();
     } catch (err) {
@@ -211,6 +213,9 @@ class UploadQueueManager {
         item.error = err.message || 'Upload failed.';
         item.speed = 0;
         item.eta = null;
+        if (!isCancelled) {
+          toast.error(`Failed to upload ${item.fileName}: ${err.message || 'Error'}`);
+        }
         this.notify();
         this.processQueue();
       }

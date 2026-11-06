@@ -8,13 +8,8 @@ import {
   X, 
   CheckCircle2, 
   AlertCircle, 
-  Loader2, 
   Gauge, 
   Clock, 
-  HardDrive, 
-  Layers,
-  Sparkles,
-  ArrowRight,
   Trash2
 } from 'lucide-react';
 import { uploadQueue } from '../services/uploadQueue';

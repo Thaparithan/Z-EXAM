@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  FileText, 
-  Search, 
   Filter, 
   Sparkles, 
-  CheckCircle, 
   BookOpen,
-  ArrowRight,
   Inbox
 } from 'lucide-react';
 import SubjectTabs from '../components/SubjectTabs';
