@@ -13,3 +13,4 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.exam_papers;
   END IF;
 END $$;
+
