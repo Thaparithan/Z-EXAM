@@ -160,17 +160,18 @@ class UploadQueueManager {
           grade: item.grade,
           file: item.file,
         },
-        (progress) => {
+        (progress, loaded, total) => {
           if (item.status === 'cancelled') return;
           item.progress = progress;
-          item.bytesTransferred = Math.round((progress / 100) * item.totalBytes);
+          item.bytesTransferred = (loaded !== undefined) ? loaded : Math.round((progress / 100) * item.totalBytes);
+          if (total) item.totalBytes = total;
 
           const now = Date.now();
           const elapsed = (now - item.lastTimestamp) / 1000;
-          if (elapsed >= 0.5) {
+          if (elapsed >= 0.4) {
             const diffBytes = item.bytesTransferred - item.lastBytes;
             const currentSpeed = diffBytes / elapsed;
-            item.speed = item.speed ? (item.speed * 0.5 + currentSpeed * 0.5) : currentSpeed;
+            item.speed = item.speed ? (item.speed * 0.6 + currentSpeed * 0.4) : currentSpeed;
             item.lastTimestamp = now;
             item.lastBytes = item.bytesTransferred;
 
@@ -179,6 +180,9 @@ class UploadQueueManager {
             }
           }
           this.notify();
+        },
+        (abortFn) => {
+          item.abort = abortFn;
         }
       );
 
@@ -187,18 +191,23 @@ class UploadQueueManager {
       item.bytesTransferred = item.totalBytes;
       item.speed = 0;
       item.eta = 0;
+      item.error = null;
       this.notify();
       this.processQueue();
     } catch (err) {
       console.error(`Upload error on ${item.fileName}:`, err);
-      if (item.retryCount < MAX_RETRIES) {
+      
+      const isCancelled = item.status === 'cancelled' || err.message?.toLowerCase().includes('cancelled');
+      const isBucketError = err.message?.toLowerCase().includes('bucket') || err.message?.toLowerCase().includes('permission');
+
+      if (!isCancelled && !isBucketError && item.retryCount < MAX_RETRIES) {
         item.retryCount += 1;
         item.status = 'queued';
         item.error = `Retrying (${item.retryCount}/${MAX_RETRIES})...`;
         this.notify();
         setTimeout(() => this.processQueue(), 1500 * item.retryCount);
       } else {
-        item.status = 'failed';
+        item.status = isCancelled ? 'cancelled' : 'failed';
         item.error = err.message || 'Upload failed.';
         item.speed = 0;
         item.eta = null;
@@ -211,6 +220,9 @@ class UploadQueueManager {
   pauseUpload(id) {
     const item = this.queue.find((i) => i.id === id);
     if (!item) return;
+    if (typeof item.abort === 'function') {
+      try { item.abort(); } catch {}
+    }
     item.status = 'paused';
     item.speed = 0;
     this.notify();
@@ -240,6 +252,9 @@ class UploadQueueManager {
   cancelUpload(id) {
     const item = this.queue.find((i) => i.id === id);
     if (!item) return;
+    if (typeof item.abort === 'function') {
+      try { item.abort(); } catch {}
+    }
     item.status = 'cancelled';
     this.notify();
     this.processQueue();

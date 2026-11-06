@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const env = (typeof import.meta !== 'undefined' && import.meta.env) 
-  ? import.meta.env 
+const env = (typeof import.meta !== 'undefined' && import.meta.env)
+  ? import.meta.env
   : (typeof process !== 'undefined' && process.env ? process.env : {});
 
 const rawUrl = env.VITE_SUPABASE_URL || 'https://mvufpjwmuphzgykpaswn.supabase.co';
@@ -12,8 +12,8 @@ export const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '
 export const supabaseAnonKey = rawKey.trim();
 
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl && 
-  supabaseAnonKey && 
+  supabaseUrl &&
+  supabaseAnonKey &&
   !supabaseUrl.includes('your-project-id') &&
   !supabaseAnonKey.includes('your-anon-key')
 );

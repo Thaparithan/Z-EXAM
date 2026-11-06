@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured, STORAGE_BUCKET, trackDownload } from './supabase.js';
+import { supabase, isSupabaseConfigured, STORAGE_BUCKET, trackDownload, supabaseUrl, supabaseAnonKey } from './supabase.js';
 import { SUBJECTS } from '../constants/subjects.js';
 
 const COLLECTION_NAME = 'exam_papers';
@@ -84,29 +84,8 @@ const mapRowToPaper = (row) => ({
   isLocal: false,
 });
 
-const SAMPLE_STARTER_PAPERS = [
-  {
-    id: 'sample-ict-2024',
-    title: 'G.C.E O/L ICT Model Examination Paper (Paper I & II)',
-    subject: 'ict',
-    subjectName: 'ICT',
-    year: '2024',
-    term: 'Model Paper',
-    grade: 'Grade 11',
-    fileName: 'sample_ict_2024_paper.pdf',
-    fileSize: 456,
-    fileExtension: 'pdf',
-    mimeType: 'application/pdf',
-    fileUrl: '/sample_ict_2024_paper.pdf',
-    storagePath: 'sample/sample_ict_2024_paper.pdf',
-    downloadCount: 142,
-    createdAtMs: Date.now() - 3600000,
-    isLocal: false,
-  }
-];
-
 export const paperService = {
-  // Subscribe to real-time papers updates
+  // Subscribe to real-time papers updates (Strictly ZERO demo papers)
   subscribePapers: (callback) => {
     if (isSupabaseActive()) {
       let isSubscribed = true;
@@ -120,23 +99,23 @@ export const paperService = {
 
           if (error) throw error;
           if (isSubscribed) {
-            const mapped = (data && data.length > 0) 
-              ? data.map(mapRowToPaper) 
-              : SAMPLE_STARTER_PAPERS;
+            // Strictly real papers only - 0 dummy papers
+            const mapped = (data && data.length > 0) ? data.map(mapRowToPaper) : [];
             callback(mapped);
           }
         } catch (err) {
-          console.warn('Supabase papers query warning, falling back to starter index:', err.message);
+          console.warn('Supabase query notice:', err.message);
           if (isSubscribed) {
+            // Offline / Local fallback: strictly actual papers only
             const local = paperService.getLocalPapers();
-            callback(local.length > 0 ? local : SAMPLE_STARTER_PAPERS);
+            callback(local);
           }
         }
       };
 
       fetchPapers();
 
-      // Listen to real-time changes
+      // Listen to real-time database changes
       const channel = supabase
         .channel('zexam_papers_realtime')
         .on(
@@ -157,7 +136,7 @@ export const paperService = {
     // Local / Offline fallback listener
     const notifyLocal = () => {
       const papers = paperService.getLocalPapers();
-      callback(papers.length > 0 ? papers : SAMPLE_STARTER_PAPERS);
+      callback(papers);
     };
 
     notifyLocal();
@@ -176,8 +155,12 @@ export const paperService = {
     };
   },
 
-  // Upload Paper (Supporting ANY File Type: PDF, DOCX, Images, ZIP, etc.)
-  uploadPaper: async ({ title, subject, year, term, grade, file }, onProgress = () => {}) => {
+  // Upload Paper using Real XHR Stream (Genuine non-simulated bytes, speed & ETA)
+  uploadPaper: async (
+    { title, subject, year, term, grade, file }, 
+    onProgress = () => {},
+    onAttachAbort = () => {}
+  ) => {
     const timestamp = Date.now();
     const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'file';
@@ -187,59 +170,104 @@ export const paperService = {
     const subjectName = subjectObj ? subjectObj.name : subject.toUpperCase();
 
     if (isSupabaseActive()) {
-      try {
-        onProgress(20);
+      return new Promise((resolve, reject) => {
         const storagePath = `papers/${subject}/${timestamp}_${cleanFileName}`;
+        const uploadEndpoint = `${supabaseUrl}/storage/v1/object/${STORAGE_BUCKET}/${storagePath}`;
 
-        // 1. Upload to Supabase Storage
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .upload(storagePath, file, {
-            cacheControl: '3600',
-            upsert: true,
-            contentType: mimeType,
-          });
+        const xhr = new XMLHttpRequest();
+        onAttachAbort(() => xhr.abort());
 
-        if (uploadErr) throw uploadErr;
-
-        onProgress(70);
-
-        // 2. Obtain Public URL
-        const { data: urlData } = supabase.storage
-          .from(STORAGE_BUCKET)
-          .getPublicUrl(uploadData.path);
-
-        // 3. Insert record in PostgreSQL database
-        const payload = {
-          title: title.trim(),
-          subject_id: subject.toLowerCase(),
-          subject_name: subjectName,
-          term: term || 'Final Paper',
-          year: String(year),
-          grade: grade || 'All Grades',
-          file_name: file.name,
-          file_path: uploadData.path,
-          file_url: urlData.publicUrl,
-          file_size_bytes: file.size,
-          file_extension: fileExtension,
-          mime_type: mimeType,
-          download_count: 0,
+        // Real-time byte tracking stream
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(percent, event.loaded, event.total);
+          }
         };
 
-        const { data: inserted, error: dbErr } = await supabase
-          .from(COLLECTION_NAME)
-          .insert(payload)
-          .select()
-          .single();
+        xhr.onload = async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              onProgress(100, file.size, file.size);
 
-        if (dbErr) throw dbErr;
+              // Obtain Public CDN URL
+              const { data: urlData } = supabase.storage
+                .from(STORAGE_BUCKET)
+                .getPublicUrl(storagePath);
 
-        onProgress(100);
-        return { id: inserted.id, success: true };
-      } catch (err) {
-        console.error('Supabase upload error:', err);
-        throw err;
-      }
+              // Insert metadata into PostgreSQL database
+              const payload = {
+                title: title.trim(),
+                subject_id: subject.toLowerCase(),
+                subject_name: subjectName,
+                term: term || 'Final Paper',
+                year: String(year),
+                grade: grade || 'All Grades',
+                file_name: file.name,
+                file_path: storagePath,
+                file_url: urlData.publicUrl,
+                file_size_bytes: file.size,
+                file_extension: fileExtension,
+                mime_type: mimeType,
+                download_count: 0,
+              };
+
+              const { data: inserted, error: dbErr } = await supabase
+                .from(COLLECTION_NAME)
+                .insert(payload)
+                .select()
+                .single();
+
+              if (dbErr) {
+                console.error('Database insertion error:', dbErr);
+                throw new Error(`Database error: ${dbErr.message || 'Failed to save paper metadata'}`);
+              }
+
+              resolve({ id: inserted.id, success: true });
+            } catch (err) {
+              reject(err);
+            }
+          } else {
+            // Intelligent Diagnostic Handling
+            let errorMsg = `Upload failed (Status ${xhr.status})`;
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              if (resJson.message) {
+                if (resJson.message.toLowerCase().includes('bucket not found')) {
+                  errorMsg = `Storage Bucket '${STORAGE_BUCKET}' not found. Please run the SQL setup script in your Supabase SQL Editor.`;
+                } else {
+                  errorMsg = resJson.message;
+                }
+              }
+            } catch {
+              if (xhr.status === 404) {
+                errorMsg = `Storage Bucket '${STORAGE_BUCKET}' does not exist. Run the SQL migration in Supabase to create it.`;
+              } else if (xhr.status === 403 || xhr.status === 401) {
+                errorMsg = `Permission Denied: Please run the SQL migration in Supabase SQL Editor to enable public storage upload policy.`;
+              }
+            }
+            reject(new Error(errorMsg));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('Network connection error while uploading to Supabase Storage.'));
+        };
+
+        xhr.onabort = () => {
+          reject(new Error('Upload cancelled.'));
+        };
+
+        xhr.open('POST', uploadEndpoint, true);
+        xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
+        xhr.setRequestHeader('apikey', supabaseAnonKey);
+        xhr.setRequestHeader('x-upsert', 'true');
+        if (mimeType) {
+          xhr.setRequestHeader('Content-Type', mimeType);
+        }
+
+        xhr.send(file);
+      });
     }
 
     // Local Fallback Upload using IndexedDB + LocalStorage
@@ -247,16 +275,16 @@ export const paperService = {
       try {
         let currentProgress = 0;
         const interval = setInterval(() => {
-          currentProgress += 25;
+          currentProgress += 20;
           if (currentProgress > 100) currentProgress = 100;
-          onProgress(currentProgress);
-        }, 100);
+          onProgress(currentProgress, Math.round((currentProgress / 100) * file.size), file.size);
+        }, 120);
 
         const paperId = `local_${timestamp}_${Math.random().toString(36).substring(2, 8)}`;
         await storeBlobInIndexedDB(paperId, file);
 
         clearInterval(interval);
-        onProgress(100);
+        onProgress(100, file.size, file.size);
 
         const localPapers = paperService.getLocalPapers();
         const newPaper = {
@@ -299,7 +327,7 @@ export const paperService = {
           await supabase.storage
             .from(STORAGE_BUCKET)
             .remove([paper.storagePath])
-            .catch((e) => console.warn('Storage delete warning:', e));
+            .catch((e) => console.warn('Storage delete notice:', e));
         }
 
         // Delete from database
@@ -381,7 +409,7 @@ export const paperService = {
     return null;
   },
 
-  // Helper to read local papers array
+  // Helper to read local papers array (Strictly zero fake papers)
   getLocalPapers: () => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
