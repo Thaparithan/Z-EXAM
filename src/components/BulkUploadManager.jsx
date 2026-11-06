@@ -14,15 +14,14 @@ import {
   Sparkles
 } from 'lucide-react';
 import { uploadQueue } from '../services/uploadQueue';
-import { SUBJECTS, YEARS, TERMS } from '../constants/subjects';
+import { SUBJECTS, TERMS } from '../constants/subjects';
 
 export default function BulkUploadManager() {
   const [queueState, setQueueState] = useState(uploadQueue.getState());
   const fileInputRef = useRef(null);
 
-  // Batch Default Settings
+  // Batch Default Settings (Exam Year removed per user request)
   const [batchSubject, setBatchSubject] = useState(SUBJECTS[0].id);
-  const [batchYear, setBatchYear] = useState('2024');
   const [batchTerm, setBatchTerm] = useState('3rd Term');
   const [batchGrade, setBatchGrade] = useState('Grade 11');
 
@@ -51,7 +50,7 @@ export default function BulkUploadManager() {
     if (validFiles.length > 0) {
       uploadQueue.addFiles(validFiles, {
         subject: batchSubject,
-        year: batchYear,
+        year: '2024',
         term: batchTerm,
         grade: batchGrade
       });
@@ -65,7 +64,6 @@ export default function BulkUploadManager() {
   const handleApplyBatchToPending = () => {
     uploadQueue.applyMetadataToPending({
       subject: batchSubject,
-      year: batchYear,
       term: batchTerm,
       grade: batchGrade
     });
@@ -135,7 +133,7 @@ export default function BulkUploadManager() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Subject
@@ -149,21 +147,6 @@ export default function BulkUploadManager() {
                   <option key={s.id} value={s.id}>
                     {s.name} - {s.fullName}
                   </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                Exam Year
-              </label>
-              <select
-                value={batchYear}
-                onChange={(e) => setBatchYear(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                {YEARS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
                 ))}
               </select>
             </div>
@@ -337,8 +320,8 @@ export default function BulkUploadManager() {
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${subjectObj.badgeBg}`}>
                             {subjectObj.name}
                           </span>
-                          <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700/60 font-mono">
-                            {item.year} • {item.term}
+                          <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700/60 font-mono">
+                            {item.term}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5 truncate font-mono">

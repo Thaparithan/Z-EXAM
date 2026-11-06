@@ -51,10 +51,9 @@ export default function AdminView({
       const q = manageSearch.toLowerCase();
       const matchTitle = p.title?.toLowerCase().includes(q);
       const matchSub = p.subject?.toLowerCase().includes(q);
-      const matchYr = String(p.year).includes(q);
       const matchTerm = p.term?.toLowerCase().includes(q);
       const matchExt = (p.fileExtension || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchSub && !matchYr && !matchTerm && !matchExt) return false;
+      if (!matchTitle && !matchSub && !matchTerm && !matchExt) return false;
     }
     return true;
   });
@@ -62,18 +61,18 @@ export default function AdminView({
   return (
     <div className="w-full flex-1 flex flex-col pb-20">
       {/* Admin Top Dashboard Bar */}
-      <section className="bg-white dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 py-6 px-4 sm:px-6">
+      <section className="bg-slate-900/80 border-b border-slate-800 py-6 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-2xl font-black text-white tracking-tight">
                 Admin Control Room
               </h1>
-              <span className="text-xs bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-mono px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-500/30">
+              <span className="text-xs bg-indigo-500/20 text-indigo-300 font-mono px-2 py-0.5 rounded-md border border-indigo-500/30">
                 zynor.ta
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               High-speed bulk exam paper manager with 3x concurrent resumable uploads across the 7 subjects.
             </p>
           </div>
@@ -85,10 +84,10 @@ export default function AdminView({
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
                 activeTab === 'upload'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-750'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
               }`}
             >
-              <Zap className="w-4 h-4 text-amber-500 dark:text-amber-300" />
+              <Zap className="w-4 h-4 text-amber-300" />
               <span>Bulk Upload (3x Concurrency)</span>
             </button>
 
@@ -97,7 +96,7 @@ export default function AdminView({
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
                 activeTab === 'manage'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-750'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
               }`}
             >
               <FolderOpen className="w-4 h-4" />
@@ -117,13 +116,13 @@ export default function AdminView({
                   setManageSubject(sub.id);
                   setActiveTab('manage');
                 }}
-                className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 hover:border-indigo-500/40 rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-900 group shadow-xs"
+                className="bg-slate-950/60 border border-slate-800/80 hover:border-indigo-500/40 rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-900 group shadow-xs"
               >
-                <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300 truncate">
+                <div className="text-[11px] font-semibold text-slate-400 group-hover:text-indigo-300 truncate">
                   {sub.name}
                 </div>
-                <div className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                  {count} <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">papers</span>
+                <div className="text-lg font-bold text-slate-100 mt-0.5">
+                  {count} <span className="text-[10px] text-slate-500 font-normal">papers</span>
                 </div>
               </div>
             );
@@ -139,7 +138,7 @@ export default function AdminView({
         ) : (
           /* TAB 2: MANAGE PAPERS */
           <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-xs">
               <div className="flex-1 overflow-x-auto">
                 <SubjectTabs
                   selectedSubject={manageSubject}
@@ -149,25 +148,25 @@ export default function AdminView({
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={manageSearch}
                     onChange={(e) => setManageSearch(e.target.value)}
                     placeholder="Search manage papers..."
-                    className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    className="w-full pl-9 pr-8 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                   {manageSearch && (
                     <button
                       onClick={() => setManageSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap hidden sm:block">
-                  Found <span className="font-bold text-slate-800 dark:text-slate-200">{filteredManagePapers.length}</span> papers
+                <div className="text-xs text-slate-400 whitespace-nowrap hidden sm:block">
+                  Found <span className="font-bold text-slate-200">{filteredManagePapers.length}</span> papers
                 </div>
               </div>
             </div>
@@ -186,12 +185,12 @@ export default function AdminView({
                 ))}
               </div>
             ) : (
-              <div className="py-16 text-center bg-white/60 dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
-                <FileText className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-3" />
-                <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">
+              <div className="py-16 text-center bg-slate-900/40 rounded-3xl border border-slate-800 shadow-xs">
+                <FileText className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-slate-300">
                   No Exam Papers Found
                 </h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   Upload papers using the "Bulk Upload" tab above.
                 </p>
               </div>

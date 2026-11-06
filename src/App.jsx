@@ -31,33 +31,16 @@ export default function App() {
   const [adminLoginModalOpen, setAdminLoginModalOpen] = useState(false);
   const [previewPaper, setPreviewPaper] = useState(null);
 
-  // Theme State (Dark / Light)
-  const [theme, setTheme] = useState(() => {
-    try {
-      return localStorage.getItem('zexam_theme') || 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
+  // Permanent Pure Dark Mode
   useEffect(() => {
     try {
-      if (theme === 'light') {
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      }
-      localStorage.setItem('zexam_theme', theme);
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      localStorage.removeItem('zexam_theme');
     } catch (err) {
-      console.error('Theme persistence error:', err);
+      console.error(err);
     }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  }, []);
 
   // Direct Admin URL Detection (#admin, ?admin, /admin)
   useEffect(() => {
@@ -137,8 +120,6 @@ export default function App() {
         isAdmin={isAdminAuthenticated && isAdminViewActive}
         onLogout={handleLogout}
         onSwitchView={(val) => setIsAdminViewActive(val)}
-        theme={theme}
-        toggleTheme={toggleTheme}
       />
 
       {/* Main View Router with Suspense */}
