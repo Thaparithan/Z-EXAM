@@ -4,8 +4,12 @@ const env = (typeof import.meta !== 'undefined' && import.meta.env)
   ? import.meta.env 
   : (typeof process !== 'undefined' && process.env ? process.env : {});
 
-const supabaseUrl = env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
+const rawUrl = env.VITE_SUPABASE_URL || 'https://mvufpjwmuphzgykpaswn.supabase.co';
+const rawKey = env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_XpK4NxgXZHsxexCGArNHnA_cV3RDBc1';
+
+// Clean URL: strip /rest/v1 if passed by mistake
+export const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '').trim();
+export const supabaseAnonKey = rawKey.trim();
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -16,8 +20,8 @@ export const isSupabaseConfigured = Boolean(
 
 // Resilient client instance
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-anon-key',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       persistSession: true,

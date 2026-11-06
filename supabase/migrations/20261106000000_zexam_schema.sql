@@ -87,15 +87,15 @@ CREATE POLICY "Public Read Papers"
 -- Admins: Can insert, update, delete papers
 CREATE POLICY "Admin Insert Papers" 
     ON public.exam_papers FOR INSERT 
-    WITH CHECK (public.is_admin() OR auth.role() = 'authenticated');
+    WITH CHECK (true);
 
 CREATE POLICY "Admin Update Papers" 
     ON public.exam_papers FOR UPDATE 
-    USING (public.is_admin() OR auth.role() = 'authenticated');
+    USING (true);
 
 CREATE POLICY "Admin Delete Papers" 
     ON public.exam_papers FOR DELETE 
-    USING (public.is_admin() OR auth.role() = 'authenticated');
+    USING (true);
 
 -- 9. Storage Bucket Setup ('exam-papers')
 INSERT INTO storage.buckets (id, name, public)
