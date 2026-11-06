@@ -10,7 +10,7 @@ import PaperCard from '../components/PaperCard';
 import { SUBJECTS, YEARS, TERMS } from '../constants/subjects';
 
 export default function StudentView({
-  papers,
+  papers = [],
   selectedSubject,
   setSelectedSubject,
   searchTerm,

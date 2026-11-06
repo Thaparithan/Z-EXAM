@@ -96,3 +96,4 @@ BEGIN
     WHERE id = paper_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+

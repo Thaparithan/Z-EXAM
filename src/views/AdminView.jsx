@@ -14,7 +14,7 @@ import { paperService } from '../services/paperService';
 import { toast } from '../services/toast';
 
 export default function AdminView({
-  papers,
+  papers = [],
   onDownload,
   onPreview
 }) {

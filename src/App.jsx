@@ -4,6 +4,7 @@ import Footer from './components/Footer';
 import PDFPreviewModal from './components/PDFPreviewModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import Toast from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
 import { paperService } from './services/paperService';
 import { authService } from './services/authService';
 import { Loader2 } from 'lucide-react';
@@ -148,31 +149,33 @@ export default function App() {
             <p className="text-sm font-medium">Loading Z-EXAM Archive...</p>
           </div>
         ) : (
-          <Suspense
-            fallback={
-              <div className="flex-1 flex items-center justify-center py-20 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-              </div>
-            }
-          >
-            {isAdminAuthenticated && isAdminViewActive ? (
-              <AdminView
-                papers={papers}
-                onDownload={handleDownload}
-                onPreview={handlePreview}
-              />
-            ) : (
-              <StudentView
-                papers={papers}
-                selectedSubject={selectedSubject}
-                setSelectedSubject={setSelectedSubject}
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                onDownload={handleDownload}
-                onPreview={handlePreview}
-              />
-            )}
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <div className="flex-1 flex items-center justify-center py-20 text-slate-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                </div>
+              }
+            >
+              {isAdminAuthenticated && isAdminViewActive ? (
+                <AdminView
+                  papers={papers}
+                  onDownload={handleDownload}
+                  onPreview={handlePreview}
+                />
+              ) : (
+                <StudentView
+                  papers={papers}
+                  selectedSubject={selectedSubject}
+                  setSelectedSubject={setSelectedSubject}
+                  searchTerm={searchTerm}
+                  setSearchTerm={setSearchTerm}
+                  onDownload={handleDownload}
+                  onPreview={handlePreview}
+                />
+              )}
+            </Suspense>
+          </ErrorBoundary>
         )}
       </main>
 

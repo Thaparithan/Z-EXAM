@@ -10,7 +10,8 @@ import {
   AlertCircle, 
   Gauge, 
   Clock, 
-  Trash2
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import { uploadQueue } from '../services/uploadQueue';
 import { SUBJECTS, YEARS, TERMS } from '../constants/subjects';
