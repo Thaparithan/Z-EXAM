@@ -84,14 +84,55 @@ const mapRowToPaper = (row) => ({
   isLocal: false,
 });
 
-export const paperService = {
-  // Subscribe to real-time papers updates (Strictly ZERO demo papers)
-  subscribePapers: (callback) => {
-    if (isSupabaseActive()) {
-      let isSubscribed = true;
+// Multi-Tier Real-Time Synchronization Hub
+const SYNC_EVENT_NAME = 'zexam_papers_sync_trigger';
+let globalRealtimeChannel = null;
+const broadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('zexam_papers_sync_channel')
+  : null;
 
-      const fetchPapers = async () => {
-        try {
+export const triggerGlobalSync = () => {
+  if (typeof window !== 'undefined') {
+    // 1. Same-tab reactive event
+    window.dispatchEvent(new CustomEvent(SYNC_EVENT_NAME, { detail: { timestamp: Date.now() } }));
+
+    // 2. Cross-tab BroadcastChannel
+    if (broadcastChannel) {
+      try {
+        broadcastChannel.postMessage({ type: 'PAPERS_UPDATED', timestamp: Date.now() });
+      } catch (e) {
+        console.warn('BroadcastChannel error:', e);
+      }
+    }
+
+    // 3. Supabase Realtime broadcast message (across devices & networks)
+    if (globalRealtimeChannel && isSupabaseActive()) {
+      try {
+        globalRealtimeChannel.send({
+          type: 'broadcast',
+          event: 'papers_updated',
+          payload: { timestamp: Date.now() }
+        });
+      } catch (e) {
+        console.warn('Supabase broadcast error:', e);
+      }
+    }
+  }
+};
+
+export const paperService = {
+  triggerGlobalSync,
+
+  // Subscribe to real-time papers updates with automatic multi-tier sync
+  subscribePapers: (callback) => {
+    let isSubscribed = true;
+    let isFetching = false;
+
+    const fetchPapers = async () => {
+      if (isFetching || !isSubscribed) return;
+      isFetching = true;
+      try {
+        if (isSupabaseActive()) {
           const { data, error } = await supabase
             .from(COLLECTION_NAME)
             .select('*')
@@ -103,21 +144,36 @@ export const paperService = {
             const mapped = (data && data.length > 0) ? data.map(mapRowToPaper) : [];
             callback(mapped);
           }
-        } catch (err) {
-          console.warn('Supabase query notice:', err.message);
-          if (isSubscribed) {
-            // Offline / Local fallback: strictly actual papers only
-            const local = paperService.getLocalPapers();
-            callback(local);
-          }
+        } else {
+          // Offline / Local fallback: strictly actual papers only
+          const local = paperService.getLocalPapers();
+          if (isSubscribed) callback(local);
         }
-      };
+      } catch (err) {
+        console.warn('Paper fetch notice:', err.message);
+        if (isSubscribed) {
+          const local = paperService.getLocalPapers();
+          callback(local);
+        }
+      } finally {
+        isFetching = false;
+      }
+    };
 
-      fetchPapers();
+    // Initial immediate fetch
+    fetchPapers();
 
-      // Listen to real-time database changes
-      const channel = supabase
-        .channel('zexam_papers_realtime')
+    // 1. Supabase Realtime channel (postgres_changes + custom broadcast)
+    let channel = null;
+    if (isSupabaseActive()) {
+      channel = supabase.channel('zexam_papers_realtime_hub', {
+        config: {
+          broadcast: { self: true }
+        }
+      });
+      globalRealtimeChannel = channel;
+
+      channel
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: COLLECTION_NAME },
@@ -125,33 +181,68 @@ export const paperService = {
             fetchPapers();
           }
         )
-        .subscribe();
-
-      return () => {
-        isSubscribed = false;
-        supabase.removeChannel(channel);
-      };
+        .on('broadcast', { event: 'papers_updated' }, () => {
+          fetchPapers();
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            fetchPapers();
+          }
+        });
     }
 
-    // Local / Offline fallback listener
-    const notifyLocal = () => {
-      const papers = paperService.getLocalPapers();
-      callback(papers);
+    // 2. Same-tab reactive event listener
+    const handleSyncEvent = () => {
+      fetchPapers();
     };
+    window.addEventListener(SYNC_EVENT_NAME, handleSyncEvent);
+    window.addEventListener('zexam_local_update', handleSyncEvent);
+    window.addEventListener('storage', handleSyncEvent);
 
-    notifyLocal();
-    const handleStorageChange = (e) => {
-      if (e.key === LOCAL_STORAGE_KEY || e.type === 'zexam_local_update') {
-        notifyLocal();
+    // 3. Cross-tab BroadcastChannel listener
+    const handleBroadcast = (event) => {
+      if (event.data?.type === 'PAPERS_UPDATED') {
+        fetchPapers();
       }
     };
+    if (broadcastChannel) {
+      broadcastChannel.addEventListener('message', handleBroadcast);
+    }
 
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('zexam_local_update', handleStorageChange);
+    // 4. Tab visibility & focus change listener (refreshes automatically when user switches between student/admin tabs)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPapers();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleSyncEvent);
+
+    // 5. Intelligent lightweight background poll (every 4 seconds when tab is visible)
+    // Ensures papers are 100% synchronized even across separate devices or if websockets drop
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchPapers();
+      }
+    }, 4000);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('zexam_local_update', handleStorageChange);
+      isSubscribed = false;
+      clearInterval(pollInterval);
+      window.removeEventListener(SYNC_EVENT_NAME, handleSyncEvent);
+      window.removeEventListener('zexam_local_update', handleSyncEvent);
+      window.removeEventListener('storage', handleSyncEvent);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleSyncEvent);
+      if (broadcastChannel) {
+        broadcastChannel.removeEventListener('message', handleBroadcast);
+      }
+      if (channel) {
+        supabase.removeChannel(channel);
+        if (globalRealtimeChannel === channel) {
+          globalRealtimeChannel = null;
+        }
+      }
     };
   },
 
@@ -226,6 +317,9 @@ export const paperService = {
                 }
                 throw new Error(`Database error: ${friendlyMsg}`);
               }
+
+              // Trigger instant real-time auto-refresh across Student & Admin panels
+              triggerGlobalSync();
 
               resolve({ id: inserted.id, success: true });
             } catch (err) {
@@ -312,7 +406,7 @@ export const paperService = {
 
         localPapers.unshift(newPaper);
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localPapers));
-        window.dispatchEvent(new Event('zexam_local_update'));
+        triggerGlobalSync();
 
         resolve({ id: paperId, success: true });
       } catch (err) {
@@ -341,6 +435,10 @@ export const paperService = {
           .eq('id', paper.id);
 
         if (dbErr) throw dbErr;
+
+        // Trigger instant real-time auto-refresh across Student & Admin panels
+        triggerGlobalSync();
+
         return { success: true };
       } catch (err) {
         console.error('Failed to delete paper from Supabase:', err);
@@ -353,7 +451,7 @@ export const paperService = {
       await deleteBlobFromIndexedDB(paper.id).catch(() => {});
       const localPapers = paperService.getLocalPapers().filter((p) => p.id !== paper.id);
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localPapers));
-      window.dispatchEvent(new Event('zexam_local_update'));
+      triggerGlobalSync();
       return { success: true };
     } catch (err) {
       console.error('Failed to delete local paper:', err);

@@ -194,6 +194,7 @@ class UploadQueueManager {
       item.eta = 0;
       item.error = null;
       toast.success(`"${item.title}" uploaded successfully!`);
+      paperService.triggerGlobalSync();
       this.notify();
       this.processQueue();
     } catch (err) {

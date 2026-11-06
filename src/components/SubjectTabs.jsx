@@ -37,7 +37,7 @@ export default function SubjectTabs({
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all cursor-pointer border ${
             selectedSubject === 'all'
               ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/25 ring-2 ring-indigo-500/20'
-              : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
+              : 'bg-white dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white shadow-xs'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -45,7 +45,7 @@ export default function SubjectTabs({
           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
             selectedSubject === 'all' 
               ? 'bg-white/20 text-white' 
-              : 'bg-slate-800 text-slate-400'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
           }`}>
             {totalCount}
           </span>
@@ -64,7 +64,7 @@ export default function SubjectTabs({
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all cursor-pointer border ${
                 isSelected
                   ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/25 ring-2 ring-indigo-500/20'
-                  : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
+                  : 'bg-white dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white shadow-xs'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -72,7 +72,7 @@ export default function SubjectTabs({
               <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
                 isSelected 
                   ? 'bg-white/20 text-white' 
-                  : 'bg-slate-800 text-slate-400'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
               }`}>
                 {count}
               </span>
@@ -83,4 +83,3 @@ export default function SubjectTabs({
     </div>
   );
 }
-

@@ -97,3 +97,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 10. Enable Native Supabase Realtime for exam_papers
+-- Allows postgres_changes stream to broadcast automatically to all connected clients
+ALTER PUBLICATION supabase_realtime ADD TABLE public.exam_papers;
+
+
