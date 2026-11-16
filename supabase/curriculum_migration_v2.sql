@@ -13,7 +13,26 @@ ADD COLUMN IF NOT EXISTS sub_category TEXT DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_zexam_curriculum_v2 
 ON public.exam_papers (grade_level, subject_id, sub_category);
 
--- 3. Ensure Supabase Realtime publication includes exam_papers
+-- 3. Backfill existing uploaded Saivaneri / Hinduism religion papers
+UPDATE public.exam_papers
+SET sub_category = 'hinduism', 
+    subject_group = 'core',
+    grade_level = 'grade10'
+WHERE subject_id = 'religion' 
+  AND (sub_category IS NULL OR sub_category = '')
+  AND (
+    LOWER(title) LIKE '%saiva%' 
+    OR LOWER(file_name) LIKE '%saiva%'
+    OR LOWER(title) LIKE '%hindu%' 
+    OR LOWER(file_name) LIKE '%hindu%'
+  );
+
+-- 4. Clean up any encoded grade delimiters
+UPDATE public.exam_papers
+SET grade = 'grade10'
+WHERE grade LIKE 'grade10::%';
+
+-- 5. Ensure Supabase Realtime publication includes exam_papers
 DO $$
 BEGIN
   IF NOT EXISTS (

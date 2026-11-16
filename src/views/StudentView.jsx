@@ -99,14 +99,35 @@ export default function StudentView({
     // 4. Religion Stream Filter (Hinduism vs Christianity RC / Non-RC)
     if ((p.subject || '').toLowerCase() === 'religion' && selectedReligionStream !== 'all') {
       const stream = (p.subCategory || '').toLowerCase();
-      if (!stream.includes(selectedReligionStream.toLowerCase())) {
+      const titleLower = `${p.title || ''} ${p.fileName || ''}`.toLowerCase();
+      
+      let matchesStream = false;
+      if (selectedReligionStream === 'hinduism') {
+        matchesStream = stream === 'hinduism' || stream.includes('hindu') ||
+          titleLower.includes('saiva') || titleLower.includes('hindu') || 
+          titleLower.includes('சைவ') || titleLower.includes('இந்து') ||
+          (!stream && !titleLower.includes('christian') && !titleLower.includes('catholic') && !titleLower.includes('rc'));
+      } else if (selectedReligionStream === 'christianity_rc') {
+        matchesStream = stream === 'christianity_rc' || stream.includes('rc') ||
+          titleLower.includes('rc') || titleLower.includes('catholic') || titleLower.includes('கத்தோலிக்க');
+      } else if (selectedReligionStream === 'christianity_non_rc') {
+        matchesStream = stream === 'christianity_non_rc' || 
+          (titleLower.includes('christian') && !titleLower.includes('rc') && !titleLower.includes('catholic'));
+      }
+
+      if (!matchesStream) {
         return false;
       }
     }
 
     // 5. Term Filter
-    if (selectedTerm !== 'all' && (p.term || '').toLowerCase() !== selectedTerm.toLowerCase()) {
-      return false;
+    if (selectedTerm !== 'all') {
+      const pTerm = (p.term || '').toLowerCase().trim();
+      const sTerm = selectedTerm.toLowerCase().trim();
+      const termMatch = pTerm === sTerm || pTerm.replace(/\s+/g, '') === sTerm.replace(/\s+/g, '');
+      if (!termMatch) {
+        return false;
+      }
     }
 
     // 6. Search keyword

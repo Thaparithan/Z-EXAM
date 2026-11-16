@@ -65,27 +65,56 @@ export const isSupabaseActive = () => {
 };
 
 // Helper: Normalize Supabase row to Z-EXAM model
-const mapRowToPaper = (row) => ({
-  id: row.id,
-  title: row.title,
-  subject: row.subject_id || row.subject || 'ict',
-  subjectName: row.subject_name || row.subject_id,
-  grade: row.grade_level || row.grade || 'grade10',
-  gradeLevel: row.grade_level || row.grade || 'grade10',
-  subjectGroup: row.subject_group || 'core',
-  subCategory: row.sub_category || row.subCategory || null,
-  year: String(row.year || '2026'),
-  term: row.term || '3rd Term',
-  fileName: row.file_name || 'paper.pdf',
-  fileSize: Number(row.file_size_bytes || row.file_size || 0),
-  fileExtension: row.file_extension || (row.file_name ? row.file_name.split('.').pop().toLowerCase() : 'pdf'),
-  mimeType: row.mime_type || 'application/pdf',
-  fileUrl: row.file_url,
-  storagePath: row.file_path,
-  downloadCount: Number(row.download_count || 0),
-  createdAtMs: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
-  isLocal: false,
-});
+const mapRowToPaper = (row) => {
+  let grade = row.grade_level || row.grade || 'grade10';
+  let subCategory = row.sub_category || row.subCategory || null;
+
+  // Unpack embedded subCategory from grade if encoded as "grade10::hinduism"
+  if (typeof grade === 'string' && grade.includes('::')) {
+    const [cleanGrade, embeddedSub] = grade.split('::');
+    grade = cleanGrade;
+    if (!subCategory && embeddedSub) {
+      subCategory = embeddedSub;
+    }
+  }
+
+  // Resilient auto-inference for Religion stream from title/filename if subCategory is null
+  const subId = (row.subject_id || row.subject || '').toLowerCase();
+  if (!subCategory && subId === 'religion') {
+    const text = `${row.title || ''} ${row.file_name || ''}`.toLowerCase();
+    if (text.includes('saiva') || text.includes('hindu') || text.includes('சைவ') || text.includes('இந்து')) {
+      subCategory = 'hinduism';
+    } else if (text.includes('rc') || text.includes('catholic') || text.includes('கத்தோலிக்க')) {
+      subCategory = 'christianity_rc';
+    } else if (text.includes('christian') || text.includes('கிறிஸ்த')) {
+      subCategory = 'christianity_non_rc';
+    } else {
+      subCategory = 'hinduism'; // Default to Hinduism for Sri Lankan curriculum
+    }
+  }
+
+  return {
+    id: row.id,
+    title: row.title,
+    subject: subId || 'ict',
+    subjectName: row.subject_name || row.subject_id,
+    grade: grade || 'grade10',
+    gradeLevel: grade || 'grade10',
+    subjectGroup: row.subject_group || (grade === 'al' ? 'al' : 'core'),
+    subCategory: subCategory,
+    year: String(row.year || '2026'),
+    term: row.term || '3rd Term',
+    fileName: row.file_name || 'paper.pdf',
+    fileSize: Number(row.file_size_bytes || row.file_size || 0),
+    fileExtension: row.file_extension || (row.file_name ? row.file_name.split('.').pop().toLowerCase() : 'pdf'),
+    mimeType: row.mime_type || 'application/pdf',
+    fileUrl: row.file_url,
+    storagePath: row.file_path,
+    downloadCount: Number(row.download_count || 0),
+    createdAtMs: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    isLocal: false,
+  };
+};
 
 // Multi-Tier Real-Time Synchronization Hub
 const SYNC_EVENT_NAME = 'zexam_papers_sync_trigger';
@@ -289,6 +318,9 @@ export const paperService = {
                 .from(STORAGE_BUCKET)
                 .getPublicUrl(storagePath);
 
+              // Fail-safe grade encoding: embed subCategory so metadata persists even on legacy schemas
+              const encodedGrade = subCategory ? `${grade}::${subCategory}` : (grade || 'grade10');
+
               // Insert metadata into PostgreSQL database
               const payload = {
                 title: title.trim(),
@@ -296,7 +328,7 @@ export const paperService = {
                 subject_name: subjectName,
                 term: term || '3rd Term',
                 year: String(year || '2026'),
-                grade: grade || 'Grade 10',
+                grade: encodedGrade,
                 grade_level: grade || 'grade10',
                 subject_group: subjectGroup || 'core',
                 sub_category: subCategory || null,
