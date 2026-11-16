@@ -11,19 +11,32 @@ import {
   Gauge, 
   Clock, 
   Trash2,
-  Sparkles
+  Sparkles,
+  Flame
 } from 'lucide-react';
 import { uploadQueue } from '../services/uploadQueue';
-import { SUBJECTS, TERMS } from '../constants/subjects';
+import { 
+  GRADES, 
+  OL_BASKETS, 
+  CORE_SUBJECTS, 
+  SET1_SUBJECTS, 
+  SET2_SUBJECTS, 
+  SET3_SUBJECTS, 
+  AL_SUBJECTS, 
+  findSubjectById,
+  TERMS 
+} from '../constants/curriculum';
 
 export default function BulkUploadManager() {
   const [queueState, setQueueState] = useState(uploadQueue.getState());
   const fileInputRef = useRef(null);
 
-  // Batch Default Settings (Exam Year removed per user request)
-  const [batchSubject, setBatchSubject] = useState(SUBJECTS[0].id);
+  // Cascading Batch Default Settings
+  const [batchGrade, setBatchGrade] = useState('grade10'); // 'grade10' | 'grade11' | 'al'
+  const [batchBasket, setBatchBasket] = useState('core'); // 'core' | 'set1' | 'set2' | 'set3' | 'al'
+  const [batchSubject, setBatchSubject] = useState('tamil');
+  const [batchReligionStream, setBatchReligionStream] = useState('hinduism'); // 'hinduism' | 'christianity_rc' | 'christianity_non_rc'
   const [batchTerm, setBatchTerm] = useState('3rd Term');
-  const [batchGrade, setBatchGrade] = useState('Grade 11');
 
   useEffect(() => {
     const unsubscribe = uploadQueue.subscribe((state) => {
@@ -31,6 +44,26 @@ export default function BulkUploadManager() {
     });
     return unsubscribe;
   }, []);
+
+  // Update available subjects when grade or basket changes
+  const getAvailableSubjects = () => {
+    if (batchGrade === 'al') {
+      return AL_SUBJECTS;
+    }
+    if (batchBasket === 'set1') return SET1_SUBJECTS;
+    if (batchBasket === 'set2') return SET2_SUBJECTS;
+    if (batchBasket === 'set3') return SET3_SUBJECTS;
+    return CORE_SUBJECTS;
+  };
+
+  const availableSubjects = getAvailableSubjects();
+
+  // Keep batchSubject valid when available subjects change
+  useEffect(() => {
+    if (!availableSubjects.some((s) => s.id === batchSubject)) {
+      setBatchSubject(availableSubjects[0]?.id || 'tamil');
+    }
+  }, [batchGrade, batchBasket]);
 
   const handleFilesSelected = (e) => {
     const files = e.target.files;
@@ -50,9 +83,11 @@ export default function BulkUploadManager() {
     if (validFiles.length > 0) {
       uploadQueue.addFiles(validFiles, {
         subject: batchSubject,
-        year: '2024',
+        subjectGroup: batchGrade === 'al' ? 'al' : batchBasket,
+        grade: batchGrade,
+        subCategory: batchSubject === 'religion' ? batchReligionStream : null,
         term: batchTerm,
-        grade: batchGrade
+        year: '2026'
       });
     }
 
@@ -62,11 +97,17 @@ export default function BulkUploadManager() {
   };
 
   const handleApplyBatchToPending = () => {
-    uploadQueue.applyMetadataToPending({
-      subject: batchSubject,
-      term: batchTerm,
-      grade: batchGrade
-    });
+    queueState.items
+      .filter((i) => i.status === 'queued')
+      .forEach((item) => {
+        uploadQueue.updateItem(item.id, {
+          subject: batchSubject,
+          subjectGroup: batchGrade === 'al' ? 'al' : batchBasket,
+          grade: batchGrade,
+          subCategory: batchSubject === 'religion' ? batchReligionStream : null,
+          term: batchTerm
+        });
+      });
   };
 
   const formatMB = (bytes) => {
@@ -82,13 +123,7 @@ export default function BulkUploadManager() {
     return `${Math.round(bytesPerSec / 1024)} KB/s`;
   };
 
-  const formatEta = (seconds) => {
-    if (seconds === null || seconds === undefined || isNaN(seconds)) return null;
-    if (seconds < 60) return `${seconds}s`;
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}m ${s}s`;
-  };
+  const isReligion = batchSubject === 'religion';
 
   return (
     <div className="w-full space-y-6">
@@ -109,18 +144,18 @@ export default function BulkUploadManager() {
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Select 5–10 PDFs at once. Uploads stream directly to Firebase Storage with pause, resume, and real-time speed.
+                Select 5–10 PDFs at once across Grade 10, Grade 11 (O/L), and A/L with pause, resume, and real-time streaming.
               </p>
             </div>
           </div>
         </div>
 
         {/* Batch Defaults (Apply to all selected files) */}
-        <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 mb-6 space-y-3.5">
+        <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 sm:p-5 mb-6 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Batch Defaults (Applies to Uploaded PDFs)</span>
+              <span>Batch Defaults (Applies to Uploaded Files)</span>
             </span>
             {queueState.queuedFiles > 0 && (
               <button
@@ -133,7 +168,56 @@ export default function BulkUploadManager() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 1. Grade / Level */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                Level / Grade
+              </label>
+              <select
+                value={batchGrade}
+                onChange={(e) => {
+                  const newGrade = e.target.value;
+                  setBatchGrade(newGrade);
+                  if (newGrade === 'al') {
+                    setBatchBasket('al');
+                  } else {
+                    setBatchBasket('core');
+                  }
+                }}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                <option value="grade10">Grade 10 (3rd Term Direct)</option>
+                <option value="grade11">Grade 11 (G.C.E. O/L)</option>
+                <option value="al">G.C.E. Advanced Level (A/L)</option>
+              </select>
+            </div>
+
+            {/* 2. Category / Basket */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                Subject Group / Basket
+              </label>
+              <select
+                value={batchBasket}
+                disabled={batchGrade === 'al'}
+                onChange={(e) => setBatchBasket(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer disabled:opacity-50"
+              >
+                {batchGrade === 'al' ? (
+                  <option value="al">A/L Stream Subjects</option>
+                ) : (
+                  <>
+                    <option value="core">Core Compulsory (6 Subjects)</option>
+                    <option value="set1">Set 1 (Commerce, Geography, Civics)</option>
+                    <option value="set2">Set 2 (Music, Drama, Art, Tamil Lit, Dance)</option>
+                    <option value="set3">Set 3 (ICT, PT, Agricultural, DT, Home Econ)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* 3. Specific Subject */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Subject
@@ -143,14 +227,15 @@ export default function BulkUploadManager() {
                 onChange={(e) => setBatchSubject(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
-                {SUBJECTS.map((s) => (
+                {availableSubjects.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} - {s.fullName}
+                    {s.name} {s.tamilName ? `(${s.tamilName})` : ''}
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* 4. Term / Type */}
             <div>
               <label className="block text-[11px] font-semibold text-slate-400 mb-1">
                 Exam Term / Type
@@ -165,25 +250,56 @@ export default function BulkUploadManager() {
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                Grade / Stream
-              </label>
-              <select
-                value={batchGrade}
-                onChange={(e) => setBatchGrade(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="Grade 11">Grade 11 (O/L)</option>
-                <option value="Grade 10">Grade 10</option>
-                <option value="Grade 12">Grade 12 (A/L 1st Year)</option>
-                <option value="Grade 13">Grade 13 (A/L Final)</option>
-                <option value="Grade 9">Grade 9</option>
-                <option value="All Grades">All Grades</option>
-              </select>
-            </div>
           </div>
+
+          {/* Conditional Religion Stream Selector */}
+          {isReligion && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs font-semibold text-amber-200">
+                  Select Religion Stream:
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="inline-flex items-center gap-1.5 text-xs text-amber-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="batchReligionStream"
+                    value="hinduism"
+                    checked={batchReligionStream === 'hinduism'}
+                    onChange={(e) => setBatchReligionStream(e.target.value)}
+                    className="accent-amber-400"
+                  />
+                  <span>🕉️ Hinduism (சைவநெறி)</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 text-xs text-sky-200 cursor-pointer ml-3">
+                  <input
+                    type="radio"
+                    name="batchReligionStream"
+                    value="christianity_rc"
+                    checked={batchReligionStream === 'christianity_rc'}
+                    onChange={(e) => setBatchReligionStream(e.target.value)}
+                    className="accent-sky-400"
+                  />
+                  <span>✝️ Christianity (RC / கத்தோலிக்கம்)</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 text-xs text-blue-200 cursor-pointer ml-3">
+                  <input
+                    type="radio"
+                    name="batchReligionStream"
+                    value="christianity_non_rc"
+                    checked={batchReligionStream === 'christianity_non_rc'}
+                    onChange={(e) => setBatchReligionStream(e.target.value)}
+                    className="accent-blue-400"
+                  />
+                  <span>✝️ Christianity (Non-RC)</span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Drag & Drop Multi-file Picker */}
@@ -199,71 +315,42 @@ export default function BulkUploadManager() {
             onChange={handleFilesSelected}
             className="hidden"
           />
-          <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 text-indigo-400 group-hover:scale-110 flex items-center justify-center mb-3 transition-transform border border-indigo-500/20">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mb-3 transition-colors">
             <UploadCloud className="w-7 h-7" />
           </div>
-          <p className="text-sm font-bold text-slate-100">
+          <h3 className="text-sm font-semibold text-slate-200 mb-1">
             Click to Browse or Drag & Drop Multiple Exam Papers & Resources
-          </p>
-          <p className="text-xs text-slate-400 mt-1 max-w-md">
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm">
             Select 5 to 10+ files at once (PDF, Word, Images, ZIP). Files automatically queue with maximum 3 simultaneous high-speed streams.
           </p>
-          <span className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+          <span className="inline-block mt-3 text-[10px] text-indigo-400/80 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 font-mono">
             All Formats Supported (PDF, DOCX, Images, ZIP) • Up to 50 MB per file
           </span>
         </div>
       </div>
 
-      {/* Batch Overview Banner (When Queue Has Files) */}
+      {/* Upload Queue Manager Card */}
       {queueState.totalFiles > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">
-                  Batch Upload Status
-                </h3>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300">
-                  {queueState.completedFiles} of {queueState.totalFiles} Completed
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span>Upload Queue</span>
+                <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+                  {queueState.completedFiles}/{queueState.totalFiles} Done
                 </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {formatMB(queueState.totalTransferred)} / {formatMB(queueState.totalBytes)} transferred ({queueState.overallProgress}%)
-              </p>
+              </h3>
             </div>
 
-            {/* Global Queue Actions */}
             <div className="flex items-center gap-2">
-              {queueState.uploadingFiles > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => uploadQueue.pauseAll()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer"
-                >
-                  <Pause className="w-3.5 h-3.5" />
-                  <span>Pause All</span>
-                </button>
-              ) : queueState.items.some((i) => i.status === 'paused') ? (
-                <button
-                  type="button"
-                  onClick={() => uploadQueue.resumeAll()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all cursor-pointer shadow-md"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  <span>Resume All</span>
-                </button>
-              ) : null}
-
-              {queueState.completedFiles > 0 && (
-                <button
-                  type="button"
-                  onClick={() => uploadQueue.clearCompleted()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Clear Finished</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => uploadQueue.clearCompleted()}
+                className="text-xs px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+              >
+                Clear Completed
+              </button>
             </div>
           </div>
 
@@ -271,7 +358,7 @@ export default function BulkUploadManager() {
           <div className="space-y-1.5">
             <div className="w-full bg-slate-950 rounded-full h-3 overflow-hidden border border-slate-800/80 p-0.5">
               <div 
-                className="bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 h-full rounded-full transition-all duration-300 shadow-lg shadow-indigo-500/30"
+                className="bg-indigo-500 h-full rounded-full transition-all duration-300 shadow-md shadow-indigo-500/30"
                 style={{ width: `${queueState.overallProgress}%` }}
               />
             </div>
@@ -290,7 +377,7 @@ export default function BulkUploadManager() {
           {/* Individual Queue Item Cards */}
           <div className="space-y-3 pt-2">
             {queueState.items.map((item) => {
-              const subjectObj = SUBJECTS.find((s) => s.id === item.subject) || SUBJECTS[0];
+              const subjectObj = findSubjectById(item.subject);
 
               return (
                 <div
@@ -320,6 +407,11 @@ export default function BulkUploadManager() {
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${subjectObj.badgeBg}`}>
                             {subjectObj.name}
                           </span>
+                          {item.subCategory && (
+                            <span className="text-[10px] bg-amber-500/15 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                              {item.subCategory}
+                            </span>
+                          )}
                           <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700/60 font-mono">
                             {item.term}
                           </span>
@@ -401,53 +493,33 @@ export default function BulkUploadManager() {
                         title="Remove / Cancel"
                         className="p-1.5 rounded-lg bg-slate-800/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                       >
-                        <X className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Progress & Speed metrics */}
-                  <div className="space-y-1">
-                    <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-200 ${
-                          item.status === 'completed' 
-                            ? 'bg-emerald-500' 
-                            : item.status === 'failed' 
-                            ? 'bg-rose-500' 
-                            : item.status === 'paused' 
-                            ? 'bg-amber-500' 
-                            : 'bg-indigo-500'
-                        }`}
-                        style={{ width: `${item.progress}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>
-                        {formatMB(item.bytesTransferred)} / {formatMB(item.totalBytes)} ({item.progress}%)
-                      </span>
-                      {item.status === 'uploading' && (
-                        <span className="flex items-center gap-3">
-                          <span className="text-indigo-300 font-mono font-medium">
-                            {formatSpeed(item.speed)}
-                          </span>
-                          {formatEta(item.eta) && (
-                            <span className="text-slate-400">
-                              ETA: {formatEta(item.eta)}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </div>
-
-                    {item.error && (
-                      <div className="mt-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        <span className="leading-relaxed">{item.error}</span>
+                  {/* Individual Item Progress Bar */}
+                  {item.status === 'uploading' && (
+                    <div className="space-y-1">
+                      <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-200"
+                          style={{ width: `${item.progress}%` }}
+                        />
                       </div>
-                    )}
-                  </div>
+                      <div className="flex justify-between text-[11px] text-slate-400 font-mono">
+                        <span>{item.progress}% ({formatMB(item.bytesTransferred)} / {formatMB(item.totalBytes)})</span>
+                        <span>{formatSpeed(item.speed)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Notification */}
+                  {item.error && (
+                    <div className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20 font-mono">
+                      {item.error}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -457,4 +529,3 @@ export default function BulkUploadManager() {
     </div>
   );
 }
-

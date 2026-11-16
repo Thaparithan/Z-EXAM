@@ -4,11 +4,11 @@ import {
   Zap, 
   FileText,
   Search,
-  X
+  X,
+  GraduationCap
 } from 'lucide-react';
-import { SUBJECTS } from '../constants/subjects';
-import PaperCard from '../components/PaperCard';
-import SubjectTabs from '../components/SubjectTabs';
+import { GRADES, MASTER_SUBJECTS } from '../constants/curriculum';
+import PaperListItem from '../components/PaperListItem';
 import BulkUploadManager from '../components/BulkUploadManager';
 import { paperService } from '../services/paperService';
 import { toast } from '../services/toast';
@@ -19,17 +19,9 @@ export default function AdminView({
   onPreview
 }) {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' | 'manage'
+  const [manageGrade, setManageGrade] = useState('all');
   const [manageSubject, setManageSubject] = useState('all');
   const [manageSearch, setManageSearch] = useState('');
-
-  // Paper counts for the 7 subjects
-  const paperCounts = papers.reduce((acc, p) => {
-    const sub = p.subject?.toLowerCase();
-    if (sub) {
-      acc[sub] = (acc[sub] || 0) + 1;
-    }
-    return acc;
-  }, {});
 
   const handleDeletePaper = async (paper) => {
     if (confirm(`Are you sure you want to permanently delete "${paper.title}"?`)) {
@@ -42,21 +34,42 @@ export default function AdminView({
     }
   };
 
+  // Helper to check if a paper matches grade
+  const matchesGrade = (paper, gradeId) => {
+    if (gradeId === 'all') return true;
+    const g = String(paper.grade || paper.gradeLevel || '').toLowerCase();
+    if (gradeId === 'grade10') return g.includes('10');
+    if (gradeId === 'grade11') return g.includes('11') || g.includes('o/l');
+    if (gradeId === 'al') return g.includes('al') || g.includes('a/l') || g.includes('12') || g.includes('13');
+    return true;
+  };
+
   // Filter papers for Management Tab
   const filteredManagePapers = papers.filter((p) => {
-    if (manageSubject !== 'all' && p.subject?.toLowerCase() !== manageSubject.toLowerCase()) {
+    if (!matchesGrade(p, manageGrade)) {
+      return false;
+    }
+    if (manageSubject !== 'all' && (p.subject || '').toLowerCase() !== manageSubject.toLowerCase()) {
       return false;
     }
     if (manageSearch.trim()) {
       const q = manageSearch.toLowerCase();
-      const matchTitle = p.title?.toLowerCase().includes(q);
-      const matchSub = p.subject?.toLowerCase().includes(q);
-      const matchTerm = p.term?.toLowerCase().includes(q);
+      const matchTitle = (p.title || '').toLowerCase().includes(q);
+      const matchSub = (p.subject || '').toLowerCase().includes(q);
+      const matchTerm = (p.term || '').toLowerCase().includes(q);
       const matchExt = (p.fileExtension || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchSub && !matchTerm && !matchExt) return false;
+      const matchStream = (p.subCategory || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchSub && !matchTerm && !matchExt && !matchStream) return false;
     }
     return true;
   });
+
+  const gradeCounts = {
+    all: papers.length,
+    grade10: papers.filter((p) => matchesGrade(p, 'grade10')).length,
+    grade11: papers.filter((p) => matchesGrade(p, 'grade11')).length,
+    al: papers.filter((p) => matchesGrade(p, 'al')).length,
+  };
 
   return (
     <div className="w-full flex-1 flex flex-col pb-20">
@@ -73,7 +86,7 @@ export default function AdminView({
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              High-speed bulk exam paper manager with 3x concurrent resumable uploads across the 7 subjects.
+              Curriculum bulk manager supporting Grade 10, Grade 11 (O/L), and A/L papers with 3x high-speed stream.
             </p>
           </div>
 
@@ -105,21 +118,23 @@ export default function AdminView({
           </div>
         </div>
 
-        {/* 7 Target Subjects Quick Counters */}
-        <div className="max-w-7xl mx-auto mt-6 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-          {SUBJECTS.map((sub) => {
-            const count = paperCounts[sub.id] || 0;
+        {/* Level Quick Counters */}
+        <div className="max-w-7xl mx-auto mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {GRADES.map((g) => {
+            const count = gradeCounts[g.id] || 0;
             return (
               <div 
-                key={sub.id}
+                key={g.id}
                 onClick={() => {
-                  setManageSubject(sub.id);
+                  setManageGrade(g.id);
                   setActiveTab('manage');
                 }}
-                className="bg-slate-950/60 border border-slate-800/80 hover:border-indigo-500/40 rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-900 group shadow-xs"
+                className={`bg-slate-950/60 border rounded-xl p-3 cursor-pointer transition-all hover:bg-slate-900 group shadow-xs ${
+                  manageGrade === g.id ? 'border-indigo-500/60 ring-1 ring-indigo-500/30' : 'border-slate-800/80 hover:border-indigo-500/40'
+                }`}
               >
                 <div className="text-[11px] font-semibold text-slate-400 group-hover:text-indigo-300 truncate">
-                  {sub.name}
+                  {g.name}
                 </div>
                 <div className="text-lg font-bold text-slate-100 mt-0.5">
                   {count} <span className="text-[10px] text-slate-500 font-normal">papers</span>
@@ -136,16 +151,27 @@ export default function AdminView({
           /* TAB 1: ADVANCED BULK RESUMABLE UPLOAD (3x Speed) */
           <BulkUploadManager />
         ) : (
-          /* TAB 2: MANAGE PAPERS */
+          /* TAB 2: MANAGE PAPERS (LIST VIEW - NO GRID) */
           <div className="space-y-6">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-xs">
-              <div className="flex-1 overflow-x-auto">
-                <SubjectTabs
-                  selectedSubject={manageSubject}
-                  onSelectSubject={setManageSubject}
-                  paperCounts={paperCounts}
-                />
+              {/* Level Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                {GRADES.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => setManageGrade(g.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer ${
+                      manageGrade === g.id
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800'
+                    }`}
+                  >
+                    {g.name}
+                  </button>
+                ))}
               </div>
+
+              {/* Search & Found Count */}
               <div className="flex items-center gap-3 shrink-0">
                 <div className="relative w-full sm:w-64">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -171,10 +197,11 @@ export default function AdminView({
               </div>
             </div>
 
+            {/* List View Container */}
             {filteredManagePapers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="space-y-3">
                 {filteredManagePapers.map((paper) => (
-                  <PaperCard
+                  <PaperListItem
                     key={paper.id}
                     paper={paper}
                     isAdmin={true}

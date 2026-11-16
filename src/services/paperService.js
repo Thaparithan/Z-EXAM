@@ -70,9 +70,12 @@ const mapRowToPaper = (row) => ({
   title: row.title,
   subject: row.subject_id || row.subject || 'ict',
   subjectName: row.subject_name || row.subject_id,
-  year: String(row.year || '2024'),
-  term: row.term || 'Final Paper',
-  grade: row.grade || 'All Grades',
+  grade: row.grade_level || row.grade || 'grade10',
+  gradeLevel: row.grade_level || row.grade || 'grade10',
+  subjectGroup: row.subject_group || 'core',
+  subCategory: row.sub_category || row.subCategory || null,
+  year: String(row.year || '2026'),
+  term: row.term || '3rd Term',
   fileName: row.file_name || 'paper.pdf',
   fileSize: Number(row.file_size_bytes || row.file_size || 0),
   fileExtension: row.file_extension || (row.file_name ? row.file_name.split('.').pop().toLowerCase() : 'pdf'),
@@ -248,7 +251,7 @@ export const paperService = {
 
   // Upload Paper using Real XHR Stream (Genuine non-simulated bytes, speed & ETA)
   uploadPaper: async (
-    { title, subject, year, term, grade, file }, 
+    { title, subject, year, term, grade, file, subCategory, subjectGroup }, 
     onProgress = () => {},
     onAttachAbort = () => {}
   ) => {
@@ -291,9 +294,12 @@ export const paperService = {
                 title: title.trim(),
                 subject_id: subject.toLowerCase(),
                 subject_name: subjectName,
-                term: term || 'Final Paper',
-                year: String(year),
-                grade: grade || 'All Grades',
+                term: term || '3rd Term',
+                year: String(year || '2026'),
+                grade: grade || 'Grade 10',
+                grade_level: grade || 'grade10',
+                subject_group: subjectGroup || 'core',
+                sub_category: subCategory || null,
                 file_name: file.name,
                 file_path: storagePath,
                 file_url: urlData.publicUrl,
@@ -303,11 +309,26 @@ export const paperService = {
                 download_count: 0,
               };
 
-              const { data: inserted, error: dbErr } = await supabase
+              let { data: inserted, error: dbErr } = await supabase
                 .from(COLLECTION_NAME)
                 .insert(payload)
                 .select()
                 .single();
+
+              // Graceful fallback if database schema is missing optional columns
+              if (dbErr && (dbErr.message?.includes('column') || dbErr.code === '42703')) {
+                const legacyPayload = { ...payload };
+                delete legacyPayload.grade_level;
+                delete legacyPayload.subject_group;
+                delete legacyPayload.sub_category;
+                const fbRes = await supabase
+                  .from(COLLECTION_NAME)
+                  .insert(legacyPayload)
+                  .select()
+                  .single();
+                inserted = fbRes.data;
+                dbErr = fbRes.error;
+              }
 
               if (dbErr) {
                 console.error('Database insertion error:', dbErr);
@@ -390,9 +411,12 @@ export const paperService = {
           title: title.trim(),
           subject: subject.toLowerCase(),
           subjectName: subjectName,
-          year: String(year),
-          term: term || 'Final Paper',
-          grade: grade || 'All Grades',
+          year: String(year || '2026'),
+          term: term || '3rd Term',
+          grade: grade || 'Grade 10',
+          gradeLevel: grade || 'grade10',
+          subjectGroup: subjectGroup || 'core',
+          subCategory: subCategory || null,
           fileName: file.name,
           fileSize: file.size,
           fileExtension: fileExtension,

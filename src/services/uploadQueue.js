@@ -76,9 +76,11 @@ class UploadQueueManager {
         eta: null,
         title: cleanTitle,
         subject: defaultMeta.subject || 'ict',
-        year: defaultMeta.year || '2024',
+        year: defaultMeta.year || '2026',
         term: defaultMeta.term || '3rd Term',
-        grade: defaultMeta.grade || 'Grade 11',
+        grade: defaultMeta.grade || 'grade10',
+        subCategory: defaultMeta.subCategory || null,
+        subjectGroup: defaultMeta.subjectGroup || 'core',
         status: 'queued', // 'queued' | 'uploading' | 'paused' | 'completed' | 'failed' | 'cancelled'
         error: null,
         retryCount: 0,
@@ -156,9 +158,11 @@ class UploadQueueManager {
         {
           title: item.title,
           subject: item.subject,
-          year: item.year,
-          term: item.term,
-          grade: item.grade,
+          year: item.year || '2026',
+          term: item.term || '3rd Term',
+          grade: item.grade || 'grade10',
+          subCategory: item.subCategory || null,
+          subjectGroup: item.subjectGroup || 'core',
           file: item.file,
         },
         (progress, loaded, total) => {
