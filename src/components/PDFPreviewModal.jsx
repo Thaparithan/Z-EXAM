@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Download, ExternalLink, Loader2, FileText, AlertCircle, FileArchive, Image as ImageIcon } from 'lucide-react';
 import { paperService, trackDownload } from '../services/paperService';
 import { toast } from '../services/toast';
+import { isMetaInAppBrowser, isAndroid, isIOS, openInAndroidChrome } from '../utils/browserDetection';
 
 export default function PDFPreviewModal({ paper, onClose, onDownload }) {
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -14,6 +15,27 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
 
   const directDownloadUrl = paper ? paperService.getDirectDownloadUrl(paper) : null;
   const safeFileName = (paper?.fileName || `${paper?.title || 'exam_paper'}.${fileExt}`).replace(/[/\\?%*:|"<>]/g, '_');
+
+  const handleDownloadClick = (e) => {
+    if (paper?.id) trackDownload(paper.id);
+
+    // Instagram / Facebook In-App Browser handling
+    if (isMetaInAppBrowser()) {
+      if (isAndroid() && directDownloadUrl) {
+        e.preventDefault();
+        toast.info('Opening in Chrome to download file...');
+        openInAndroidChrome(directDownloadUrl);
+        return;
+      }
+      if (isIOS()) {
+        e.preventDefault();
+        toast.info('Tap ⋯ at top-right > "Open in Safari" to save file to iPhone.');
+        return;
+      }
+    }
+
+    toast.success(`Downloading "${paper?.title}"...`);
+  };
 
   useEffect(() => {
     let active = true;
@@ -86,12 +108,7 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
               <a
                 href={directDownloadUrl}
                 download={safeFileName}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  toast.success(`Downloading "${paper.title}"...`);
-                  if (paper.id) trackDownload(paper.id);
-                }}
+                onClick={handleDownloadClick}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm cursor-pointer no-underline select-none"
               >
                 <Download className="w-4 h-4" />

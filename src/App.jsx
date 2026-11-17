@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import InAppBrowserBanner from './components/InAppBrowserBanner';
 import PDFPreviewModal from './components/PDFPreviewModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import Toast from './components/Toast';
@@ -113,6 +114,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white">
+      {/* Smart In-App Browser (Instagram / Facebook) Helper Banner */}
+      <InAppBrowserBanner />
+
       {/* Top Navbar */}
       <Navbar
         searchTerm={searchTerm}

@@ -2,7 +2,7 @@ import React from 'react';
 import { Shield } from 'lucide-react';
 
 const CURRENT_YEAR = new Date().getFullYear();
-const APP_VERSION = 'v2.0.2';
+const APP_VERSION = 'v2.0.3';
 
 export default function Footer({ onTriggerAdminModal }) {
   return (
