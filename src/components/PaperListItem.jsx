@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { findSubjectById } from '../constants/curriculum';
 import { toast } from '../services/toast';
+import { getDirectDownloadUrl, trackDownload } from '../services/paperService';
 
 export default function PaperListItem({ 
   paper, 
@@ -87,6 +88,12 @@ export default function PaperListItem({
   const isPreviewable = ['pdf', 'png', 'jpg', 'jpeg', 'webp'].includes(fileExt);
   const gradeLabel = formatGradeLabel(paper.grade || paper.gradeLevel);
   const religionStreamLabel = formatReligionStreamLabel(paper.subCategory);
+
+  const directDownloadUrl = getDirectDownloadUrl(paper);
+  let safeDownloadName = (paper.fileName || `${paper.title || 'exam_paper'}.${fileExt}`).replace(/[/\\?%*:|"<>]/g, '_');
+  if (!safeDownloadName.toLowerCase().endsWith(`.${fileExt}`)) {
+    safeDownloadName = `${safeDownloadName}.${fileExt}`;
+  }
 
   return (
     <div className="group relative bg-slate-900/90 hover:bg-slate-850 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-md transition-all duration-200 hover:shadow-indigo-500/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -176,17 +183,34 @@ export default function PaperListItem({
           </button>
         )}
 
-        {/* Download Button */}
-        <button
-          onClick={() => {
-            toast.info(`Preparing "${paper.title}" download...`);
-            onDownload(paper);
-          }}
-          className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs sm:text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 cursor-pointer"
-        >
-          <Download className="w-4 h-4 text-white" />
-          <span>Download {formatConfig.label}</span>
-        </button>
+        {/* Download Action (100% Mobile Phone & WhatsApp In-App Browser Direct Save) */}
+        {directDownloadUrl ? (
+          <a
+            href={directDownloadUrl}
+            download={safeDownloadName}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => {
+              toast.success(`Downloading "${paper.title}"...`);
+              if (paper.id) trackDownload(paper.id);
+            }}
+            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs sm:text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 cursor-pointer no-underline select-none"
+          >
+            <Download className="w-4 h-4 text-white" />
+            <span>Download {formatConfig.label}</span>
+          </a>
+        ) : (
+          <button
+            onClick={() => {
+              toast.info(`Preparing "${paper.title}" download...`);
+              onDownload(paper);
+            }}
+            className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs sm:text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-indigo-600/30 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-white" />
+            <span>Download {formatConfig.label}</span>
+          </button>
+        )}
 
         {/* Admin Delete Action */}
         {isAdmin && (

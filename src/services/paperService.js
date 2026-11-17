@@ -515,38 +515,74 @@ export const paperService = {
     }
   },
 
-  // Download Paper Helper (Handles ANY File Type: PDF, Word, Images, ZIP)
-  downloadPaper: async (paper) => {
-    try {
-      // Increment download counter
-      await trackDownload(paper.id);
+  // Helper: Construct mobile-safe direct attachment download URL (Supabase Content-Disposition: attachment)
+  getDirectDownloadUrl: (paper) => {
+    if (!paper || !paper.fileUrl) return null;
 
-      if (paper.fileUrl) {
-        // Fetch and download cleanly with original extension
-        const response = await fetch(paper.fileUrl);
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+    const rawExt = (paper.fileExtension || (paper.fileName ? paper.fileName.split('.').pop() : 'pdf')).toLowerCase();
+    let baseName = (paper.fileName || `${paper.title || 'exam_paper'}.${rawExt}`).trim();
+    
+    // Ensure extension is properly attached
+    if (!baseName.toLowerCase().endsWith(`.${rawExt}`)) {
+      baseName = `${baseName}.${rawExt}`;
+    }
+
+    // Clean filename for HTTP Content-Disposition headers (remove illegal chars like / \ ? % * : | " < >)
+    const safeFileName = baseName.replace(/[/\\?%*:|"<>]/g, '_');
+
+    // If this is a Supabase public storage URL, append ?download=safeFileName to force Content-Disposition: attachment
+    if (paper.fileUrl.includes('supabase.co/storage/v1/object/public/')) {
+      const separator = paper.fileUrl.includes('?') ? '&' : '?';
+      return `${paper.fileUrl}${separator}download=${encodeURIComponent(safeFileName)}`;
+    }
+
+    return paper.fileUrl;
+  },
+
+  // Download Paper Helper (Handles ANY File Type: PDF, Word, Images, ZIP)
+  // 100% Mobile Phone & In-App Browser (WhatsApp/Telegram) Resilient
+  downloadPaper: async (paper) => {
+    if (!paper) return;
+
+    // 1. Track download counter in background without blocking
+    if (paper.id) {
+      trackDownload(paper.id).catch((e) => console.warn('Track download error:', e));
+    }
+
+    try {
+      const rawExt = (paper.fileExtension || (paper.fileName ? paper.fileName.split('.').pop() : 'pdf')).toLowerCase();
+      let safeFileName = (paper.fileName || `${paper.title || 'exam_paper'}.${rawExt}`).replace(/[/\\?%*:|"<>]/g, '_');
+      if (!safeFileName.toLowerCase().endsWith(`.${rawExt}`)) {
+        safeFileName = `${safeFileName}.${rawExt}`;
+      }
+
+      const directUrl = paperService.getDirectDownloadUrl(paper);
+
+      if (directUrl) {
+        // Direct Native Download: 0 fetch delay, 0 RAM usage, 100% Mobile & In-App Browser Compatible
         const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = paper.fileName || `${paper.title}.${paper.fileExtension || 'pdf'}`;
+        link.href = directUrl;
+        link.download = safeFileName;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
         return;
       }
 
-      // Local Blob download
+      // Offline / Local Blob fallback (from IndexedDB)
       const blob = await getBlobFromIndexedDB(paper.id);
       if (!blob) throw new Error('File blob not found in storage');
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = paper.fileName || `${paper.title}.${paper.fileExtension || 'pdf'}`;
+      link.download = safeFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      // Give mobile OS download manager 60 seconds to finish saving instead of 1 second
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60000);
     } catch (err) {
       console.error('Download error:', err);
       if (paper.fileUrl) {
@@ -577,3 +613,7 @@ export const paperService = {
     }
   },
 };
+
+export const getDirectDownloadUrl = (paper) => paperService.getDirectDownloadUrl(paper);
+export const downloadPaper = (paper) => paperService.downloadPaper(paper);
+export { trackDownload };

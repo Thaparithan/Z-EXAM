@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Download, ExternalLink, Loader2, FileText, AlertCircle, FileArchive, Image as ImageIcon } from 'lucide-react';
-import { paperService } from '../services/paperService';
+import { paperService, trackDownload } from '../services/paperService';
+import { toast } from '../services/toast';
 
 export default function PDFPreviewModal({ paper, onClose, onDownload }) {
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -10,6 +11,9 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
   const fileExt = (paper?.fileExtension || (paper?.fileName ? paper.fileName.split('.').pop().toLowerCase() : 'pdf')).toLowerCase();
   const isPdf = fileExt === 'pdf';
   const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(fileExt);
+
+  const directDownloadUrl = paper ? paperService.getDirectDownloadUrl(paper) : null;
+  const safeFileName = (paper?.fileName || `${paper?.title || 'exam_paper'}.${fileExt}`).replace(/[/\\?%*:|"<>]/g, '_');
 
   useEffect(() => {
     let active = true;
@@ -78,13 +82,30 @@ export default function PDFPreviewModal({ paper, onClose, onDownload }) {
                 <ExternalLink className="w-4 h-4" />
               </a>
             )}
-            <button
-              onClick={() => onDownload(paper)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download {fileExt.toUpperCase()}</span>
-            </button>
+            {directDownloadUrl ? (
+              <a
+                href={directDownloadUrl}
+                download={safeFileName}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  toast.success(`Downloading "${paper.title}"...`);
+                  if (paper.id) trackDownload(paper.id);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm cursor-pointer no-underline select-none"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download {fileExt.toUpperCase()}</span>
+              </a>
+            ) : (
+              <button
+                onClick={() => onDownload(paper)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-sm cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download {fileExt.toUpperCase()}</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
